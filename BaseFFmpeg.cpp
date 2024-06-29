@@ -156,11 +156,12 @@ bool BaseFFmpeg::flush_frame(AVMediaType index) noexcept
 
 void BaseFFmpeg::seek_time(int64_t sec) noexcept
 {
+    stop(read_thread);
     stop(decode_thread);
+    PacketQueue.clear();
     FrameQueue[AVMEDIA_TYPE_AUDIO]->clear();
     FrameQueue[AVMEDIA_TYPE_VIDEO]->clear();
-    stop(read_thread);
-    PacketQueue.clear();
+
 
     if (avformat_seek_file(avfctx_input, -1,  INT64_MIN, sec * AV_TIME_BASE, sec * AV_TIME_BASE, AVSEEK_FLAG_BACKWARD) < 0)
     {
@@ -170,7 +171,7 @@ void BaseFFmpeg::seek_time(int64_t sec) noexcept
     }
 
     avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_VIDEO]);
-    //avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_AUDIO]);
+    avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_AUDIO]);
 
     run(read_thread);
     run(decode_thread);
@@ -181,12 +182,12 @@ void BaseFFmpeg::seek_time(int64_t sec) noexcept
 
 void BaseFFmpeg::stop(char type) noexcept
 {
-    if(type & read_thread)
+    if((type & read_thread) && (local_thread & read_thread))
     {
         local_thread &= ~read_thread;
         wait_read_pause.acquire();
     }
-    if(type & decode_thread)
+    if((type & decode_thread) && (local_thread & decode_thread))
     {
         local_thread &= ~decode_thread;
         wait_decode_pause.acquire();
@@ -195,12 +196,12 @@ void BaseFFmpeg::stop(char type) noexcept
 }
 void BaseFFmpeg::run(char type) noexcept
 {
-    if(type & read_thread)
+    if((type & read_thread) && !(local_thread & read_thread))
     {
         local_thread |= read_thread;
         run_read_thread.release();
     }
-    if(type & decode_thread)
+    if((type & decode_thread) && !(local_thread & decode_thread))
     {
         local_thread |= decode_thread;
 ;       run_decode_thread.release();
@@ -219,6 +220,19 @@ void BaseFFmpeg::clear() noexcept
     decode_ctx[AVMEDIA_TYPE_AUDIO].reset(nullptr);
     decode_ctx[AVMEDIA_TYPE_VIDEO].reset(nullptr);
     avfctx_input.reset(nullptr);
+
+    PacketQueue.clear();
+    FrameQueue[AVMEDIA_TYPE_AUDIO]->clear();
+    FrameQueue[AVMEDIA_TYPE_VIDEO]->clear();
+
+    for(auto& temp:AVStreamIndexToType)
+    {
+        temp=AVMEDIA_TYPE_UNKNOWN;
+    }
+    for(auto& temp:AVTypeToStreamIndex)
+    {
+        temp=-1;
+    }
     local_thread &= ~delete_thread;
 }
 

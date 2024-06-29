@@ -84,7 +84,7 @@ public:
         FrameQueue[AVMEDIA_TYPE_AUDIO].reset(new Circular_Queue<framedata_type,4>);
 	};
 	//析构
-	~BaseFFmpeg() {};
+    ~BaseFFmpeg() { clear(); };
 
 	//打开流
 	RESULT open(const char* url, byte type = in | video);

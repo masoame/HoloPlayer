@@ -47,6 +47,7 @@ namespace BaseSDL
 	};
 
 	BaseFFmpeg* target = nullptr;
+    std::jthread Thr_Player;
 
 	namespace Global_AudioRunning
 	{
@@ -54,7 +55,6 @@ namespace BaseSDL
 		Uint8* audio_pos = nullptr;
 		int audio_buflen = 0;
 		bool is_planner = false;
-
 	};
 
 	namespace Global_VideoRunning
@@ -65,10 +65,14 @@ namespace BaseSDL
 		SDL_Rect rect{0};
 		SDL_PixelFormatEnum last_format = SDL_PIXELFORMAT_IYUV;
 
+        bool is_pause = true;
+        std::binary_semaphore wait_show_pause{0};
+        std::binary_semaphore run_show_thread{0};
 	};
 
     void InitPlayer(BaseFFmpeg& rely, const char* WindowName, SDL_AudioCallback callback)
 	{
+        is_pause=true;
 		target = &rely;
 		InitAudio(callback);
 		InitVideo(WindowName);
@@ -80,7 +84,9 @@ namespace BaseSDL
 
     void StartPlayer() noexcept
 	{
-		std::thread([&]()->void
+        close();
+        target->local_thread |= BaseFFmpeg::playing_thread;
+        Thr_Player = std::jthread([&]()->void
 			{
 				auto& video_ptr = target->avframe_work[AVMEDIA_TYPE_VIDEO];
 				auto& audio_ptr = target->avframe_work[AVMEDIA_TYPE_AUDIO];
@@ -123,10 +129,17 @@ namespace BaseSDL
 
                     SDL_RenderPresent(SDL_renderer);
                     target->flush_frame(AVMEDIA_TYPE_VIDEO);
-                    while (!(target->local_thread & BaseFFmpeg::playing_thread) || (frame->pts * target->secBaseVideo) >= (audio_ptr.first->pts * target->secBaseAudio))
+                    while ((target->local_thread & BaseFFmpeg::playing_thread) && (frame->pts * target->secBaseVideo) >= (audio_ptr.first->pts * target->secBaseAudio))
+                    {
+                        if(is_pause)
+                        {
+                            wait_show_pause.release();
+                            run_show_thread.acquire();
+                        }
                         std::this_thread::sleep_for(1ms);
+                    }
 				}
-			}).detach();
+            });
 	}
 
     void convert_video_frame(AVFrame*& work, char*& buf) noexcept
@@ -271,6 +284,50 @@ namespace BaseSDL
 		rect.w = video_ctx->width;
 		rect.h = video_ctx->height;
 	}
+
+
+    void stop() noexcept
+    {
+        if(is_pause==false)
+        {
+            SDL_PauseAudio(1);
+            is_pause=true;
+            wait_show_pause.acquire();
+        }
+    }
+
+    void run() noexcept
+    {
+        if(is_pause==true)
+        {
+            is_pause=false;
+            run_show_thread.release();
+            SDL_PauseAudio(0);
+        }
+
+    }
+
+
+    extern void close() noexcept
+    {
+        if(Thr_Player.joinable())
+        {
+            stop();
+            target->local_thread &= ~BaseFFmpeg::playing_thread;
+            run();
+            Thr_Player.join();
+        }
+    }
+
+    void Destroy() noexcept
+    {
+        close();
+        SDL_CloseAudio();
+        SDL_texture.reset(nullptr);
+        SDL_renderer.reset(nullptr);
+        SDL_win.reset(nullptr);
+        delete target;
+    }
 
 }
 

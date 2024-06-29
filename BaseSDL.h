@@ -24,7 +24,7 @@ namespace BaseSDL
 
 	//指向对应FFmpeg封装层的指针
 	extern BaseFFmpeg* target;
-
+    extern std::jthread Thr_Player;
 
 	namespace Global_AudioRunning
 	{
@@ -50,6 +50,13 @@ namespace BaseSDL
 		extern SDL_Rect rect;
 		//SDL材质选择
 		extern SDL_PixelFormatEnum last_format;
+
+        //停止信号量
+        extern std::binary_semaphore wait_show_pause;
+        //开始信号量
+        extern std::binary_semaphore run_show_thread;
+        //是否停止
+        extern bool is_pause;
 	};
 
 	//处理画面帧回调封装
@@ -72,6 +79,14 @@ namespace BaseSDL
 	//开始播放
     extern void StartPlayer() noexcept;
 
+    extern void stop() noexcept;
+
+    extern void run() noexcept;
+
     extern void close() noexcept;
+
+    extern void Destroy() noexcept;
+
+
 
 };

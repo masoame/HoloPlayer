@@ -18,15 +18,16 @@ HoloMainWindow::HoloMainWindow(QWidget *parent)
 HoloMainWindow::~HoloMainWindow()
 {
     delete ui;
+    BaseSDL::Destroy();
 }
 
 void HoloMainWindow::on_stop_play_clicked()
 {
     if(BaseSDL::target == nullptr) return;
-    reverse_bit(BaseSDL::target->local_thread,static_cast<uint8_t>(BaseFFmpeg::playing_thread));
 
-    SDL_PauseAudio(!(BaseSDL::target->local_thread & BaseFFmpeg::playing_thread));
-    if(!(BaseSDL::target->local_thread & BaseFFmpeg::playing_thread))
+    BaseSDL::Global_VideoRunning::is_pause?BaseSDL::run():BaseSDL::stop();
+
+    if(BaseSDL::Global_VideoRunning::is_pause)
     ui->stop_play->setStyleSheet("                                                      \
                                     QPushButton:!hover{                                 \
                                         border:none;                                    \
@@ -77,8 +78,7 @@ void HoloMainWindow::timerEvent(QTimerEvent * event)
 void HoloMainWindow::on_time_slider_sliderPressed()
 {
     if(BaseSDL::target==nullptr) return;
-    BaseSDL::target->local_thread &= ~BaseFFmpeg::playing_thread;
-    SDL_PauseAudio(1);
+    BaseSDL::stop();
 }
 
 
@@ -86,8 +86,7 @@ void HoloMainWindow::on_time_slider_sliderReleased()
 {
     if(BaseSDL::target==nullptr) return;
     BaseSDL::target->seek_time(ui->time_slider->value());
-    BaseSDL::target->local_thread |= BaseFFmpeg::playing_thread;
-    SDL_PauseAudio(0);
+    BaseSDL::run();
 }
 
 void HoloMainWindow::on_time_slider_sliderMoved(int position)
@@ -99,14 +98,29 @@ void HoloMainWindow::on_time_slider_sliderMoved(int position)
 void HoloMainWindow::test()
 {
     QString filepath = QFileDialog::getOpenFileName(this);
-    if(BaseSDL::target == nullptr && (filepath.isEmpty() || filepath==""))return;
-    SDL_PauseAudio(1);
+    if(filepath.isEmpty() || filepath=="")return;
+
+    BaseSDL::stop();
     if (ffmpeg_dirver.open(filepath.toStdString().c_str()) != BaseFFmpeg::SUCCESS) return;
     BaseSDL::InitPlayer(ffmpeg_dirver, "show_windows");
     BaseSDL::StartPlayer();
-    std::jthread(BaseSDL::KeyMouseCallEvent).detach();
     int sec=BaseSDL::target->avfctx_input->duration/AV_TIME_BASE;
     ui->total_time->setText(QString::number(sec/60)+":"+QString::number(sec%60));
+    ui->time_slider->setSliderPosition(0);
     ui->time_slider->setMaximum(sec);
+    ui->stop_play->setStyleSheet("                                                      \
+                                    QPushButton:!hover{                                 \
+                                        border:none;                                    \
+                                        image:url(:/Image/icon/Image/icon/page1.png)    \
+                                    }                                                   \
+                                    QPushButton:hover {                                 \
+                                        border:none;                                    \
+                                        image:url(:/Image/icon/Image/icon/page0.png);   \
+                                    }                                                   \
+                                    QPushButton:pressed {                               \
+                                        border:none;                                    \
+                                        image:url(:/Image/icon/Image/icon/page1.png);   \
+                                    }                                                   \
+                                 ");
 }
 
