@@ -28,6 +28,8 @@ private slots:
 
     void test();
 
+    void on_volume_slider_valueChanged(int value);
+
 private:
     Ui::HoloMainWindow *ui;
     BaseFFmpeg ffmpeg_dirver;

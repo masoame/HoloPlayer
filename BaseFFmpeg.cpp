@@ -241,6 +241,9 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_read_thread() noexcept
     local_thread = read_thread | decode_thread;
     ThrRead = std::jthread([&]()->void
 		{
+
+            std::cout << "create read thread id: " << std::this_thread::get_id() << std::endl;
+
 			AutoAVPacketPtr avp;
             int err = AVERROR(EAGAIN);
             while (err != AVERROR_EOF)
@@ -257,13 +260,15 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_read_thread() noexcept
                     std::this_thread::sleep_for(1ms);
                     if (!(local_thread & read_thread))
                     {
-                        if(local_thread & delete_thread) return;
+                        if(local_thread & delete_thread) goto READ_END;
                         wait_read_pause.release();
                         run_read_thread.acquire();
                         break;
                     }
                 }
 			}
+            READ_END:
+            std::cout << "exit read thread id: " << std::this_thread::get_id() << std::endl;
     });
     return SUCCESS;
 }
@@ -272,13 +277,16 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
 {
     ThrDecode = std::jthread([&]()->void
 		{
+            std::cout << "create decode thread id: " << std::this_thread::get_id() << std::endl;
+
+
 			int err = AVERROR(EAGAIN);
 			AutoAVFramePtr avf = av_frame_alloc();
             while (true)
 			{
                 if (!(local_thread & decode_thread))
                 {
-                    if(local_thread & delete_thread) return;
+                    if(local_thread & delete_thread) goto DECODE_END;
                     wait_decode_pause.release();
                     run_decode_thread.acquire();
                 }
@@ -299,13 +307,16 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
                         else if (err == AVERROR_EOF)
                         {
                             insert_queue(index, nullptr);
-                            return;
+                            goto DECODE_END;
                         }
-						else return;
+                        else goto DECODE_END;
 					}
 				}
 				else { PacketQueue.pop(); }
 			}
+
+            DECODE_END:
+            std::cout << "exit decode thread id: " << std::this_thread::get_id() << std::endl;
         });
 		return SUCCESS;
 }

@@ -34,8 +34,10 @@ namespace BaseSDL
 		extern Uint8* audio_pos;
 		//采样到数据大小 =（采样个数) nb_sample * (采样点大小) bit_size
 		extern int audio_buflen;
-		//原始帧是否为planner格式
-		extern bool is_planner;
+        //原始帧是否为planner格式
+        extern bool is_planner;
+        //音量大小值
+        extern char volume;
 	};
 
 	namespace Global_VideoRunning
@@ -78,15 +80,12 @@ namespace BaseSDL
 	extern void InitPlayer(BaseFFmpeg& rely, const char* WindowName, SDL_AudioCallback callback = default_callback);
 	//开始播放
     extern void StartPlayer() noexcept;
-
+    //暂停线程
     extern void stop() noexcept;
-
+    //运行线程
     extern void run() noexcept;
-
+    //关闭
     extern void close() noexcept;
-
+    //销毁
     extern void Destroy() noexcept;
-
-
-
 };

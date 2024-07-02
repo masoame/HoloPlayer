@@ -4,13 +4,44 @@
 #include "QMessageBox"
 #include "qfiledialog.h"
 
+constexpr const char* str_StyleSheet_stop="                                                      \
+    QPushButton:!hover{                                 \
+        border:none;                                    \
+        image:url(:/Image/icon/Image/icon/page1.png)    \
+}                                                       \
+    QPushButton:hover {                                 \
+        border:none;                                    \
+        image:url(:/Image/icon/Image/icon/page0.png);   \
+}                                                       \
+    QPushButton:pressed {                               \
+        border:none;                                    \
+        image:url(:/Image/icon/Image/icon/page1.png);   \
+}                                                       \
+";
+
+constexpr const char* str_StyleSheet_run="                                                      \
+    QPushButton:!hover{                                 \
+        border:none;                                    \
+        image:url(:/Image/icon/Image/icon/page3.png)    \
+}                                                       \
+    QPushButton:hover {                                 \
+        border:none;                                    \
+        image:url(:/Image/icon/Image/icon/page2.png);   \
+}                                                       \
+    QPushButton:pressed {                               \
+        border:none;                                    \
+        image:url(:/Image/icon/Image/icon/page3.png);   \
+}                                                       \
+";
+
+
+
 HoloMainWindow::HoloMainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::HoloMainWindow)
 {
     ui->setupUi(this);
     connect(ui->open_action,SIGNAL(triggered()),this,SLOT(test()));
-
     this->startTimer(250);
 
 }
@@ -28,35 +59,9 @@ void HoloMainWindow::on_stop_play_clicked()
     BaseSDL::Global_VideoRunning::is_pause?BaseSDL::run():BaseSDL::stop();
 
     if(BaseSDL::Global_VideoRunning::is_pause)
-    ui->stop_play->setStyleSheet("                                                      \
-                                    QPushButton:!hover{                                 \
-                                        border:none;                                    \
-                                        image:url(:/Image/icon/Image/icon/page1.png)    \
-                                    }                                                   \
-                                    QPushButton:hover {                                 \
-                                        border:none;                                    \
-                                        image:url(:/Image/icon/Image/icon/page0.png);   \
-                                    }                                                   \
-                                    QPushButton:pressed {                               \
-                                        border:none;                                    \
-                                        image:url(:/Image/icon/Image/icon/page1.png);   \
-                                    }                                                   \
-                                 ");
+    ui->stop_play->setStyleSheet(str_StyleSheet_stop);
     else
-    ui->stop_play->setStyleSheet("                                                      \
-                                    QPushButton:!hover{                                 \
-                                        border:none;                                    \
-                                        image:url(:/Image/icon/Image/icon/page3.png)    \
-                                    }                                                   \
-                                    QPushButton:hover {                                 \
-                                        border:none;                                    \
-                                        image:url(:/Image/icon/Image/icon/page2.png);   \
-                                    }                                                   \
-                                    QPushButton:pressed {                               \
-                                        border:none;                                    \
-                                        image:url(:/Image/icon/Image/icon/page3.png);   \
-                                    }                                                   \
-                                 ");
+    ui->stop_play->setStyleSheet(str_StyleSheet_run);
 }
 
 void HoloMainWindow::timerEvent(QTimerEvent * event)
@@ -74,11 +79,13 @@ void HoloMainWindow::timerEvent(QTimerEvent * event)
 }
 
 
-
+bool temp_ispause = false;
 void HoloMainWindow::on_time_slider_sliderPressed()
 {
     if(BaseSDL::target==nullptr) return;
+    temp_ispause=BaseSDL::Global_VideoRunning::is_pause;
     BaseSDL::stop();
+    ui->stop_play->setStyleSheet(str_StyleSheet_stop);
 }
 
 
@@ -86,7 +93,9 @@ void HoloMainWindow::on_time_slider_sliderReleased()
 {
     if(BaseSDL::target==nullptr) return;
     BaseSDL::target->seek_time(ui->time_slider->value());
-    BaseSDL::run();
+
+    if(!temp_ispause)
+    on_stop_play_clicked();
 }
 
 void HoloMainWindow::on_time_slider_sliderMoved(int position)
@@ -97,7 +106,7 @@ void HoloMainWindow::on_time_slider_sliderMoved(int position)
 
 void HoloMainWindow::test()
 {
-    QString filepath = QFileDialog::getOpenFileName(this);
+    QString filepath = QFileDialog::getOpenFileName(this,tr("打开文件"),"./",tr("video files(*.mp4 *.mkv *.flv);;All files(*.*)"));
     if(filepath.isEmpty() || filepath=="")return;
 
     BaseSDL::stop();
@@ -108,19 +117,12 @@ void HoloMainWindow::test()
     ui->total_time->setText(QString::number(sec/60)+":"+QString::number(sec%60));
     ui->time_slider->setSliderPosition(0);
     ui->time_slider->setMaximum(sec);
-    ui->stop_play->setStyleSheet("                                                      \
-                                    QPushButton:!hover{                                 \
-                                        border:none;                                    \
-                                        image:url(:/Image/icon/Image/icon/page1.png)    \
-                                    }                                                   \
-                                    QPushButton:hover {                                 \
-                                        border:none;                                    \
-                                        image:url(:/Image/icon/Image/icon/page0.png);   \
-                                    }                                                   \
-                                    QPushButton:pressed {                               \
-                                        border:none;                                    \
-                                        image:url(:/Image/icon/Image/icon/page1.png);   \
-                                    }                                                   \
-                                 ");
+    ui->stop_play->setStyleSheet(str_StyleSheet_stop);
+}
+
+
+void HoloMainWindow::on_volume_slider_valueChanged(int value)
+{
+    BaseSDL::Global_AudioRunning::volume=value;
 }
 

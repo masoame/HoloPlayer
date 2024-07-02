@@ -4,5 +4,6 @@
         <file>Image/icon/page1.png</file>
         <file>Image/icon/page2.png</file>
         <file>Image/icon/page3.png</file>
+        <file>Image/icon/page4.png</file>
     </qresource>
 </RCC>

@@ -2,6 +2,7 @@
 #include<memory>
 #include<atomic>
 
+//循环队列抽象接口
 template<class _T>
 struct Circular_Queue_API
 {
@@ -23,7 +24,8 @@ struct Circular_Queue_API
 	virtual inline void clear() noexcept = 0;
 };
 
-template<class _T, unsigned char _bit_number = 8> 
+//循环队列
+template<class _T, unsigned char _bit_number = 4>
 class Circular_Queue :public Circular_Queue_API<_T>
 {
 	static_assert(_bit_number > 0 && _bit_number <= 64);

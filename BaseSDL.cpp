@@ -1,5 +1,5 @@
 #include "BaseSDL.h"
-
+#include<iostream>
 namespace BaseSDL
 {
 	using namespace Global_AudioRunning;
@@ -54,7 +54,8 @@ namespace BaseSDL
 		Uint8* audio_buf = nullptr;
 		Uint8* audio_pos = nullptr;
 		int audio_buflen = 0;
-		bool is_planner = false;
+        bool is_planner = false;
+        char volume = SDL_MIX_MAXVOLUME;
 	};
 
 	namespace Global_VideoRunning
@@ -88,6 +89,9 @@ namespace BaseSDL
         target->local_thread |= BaseFFmpeg::playing_thread;
         Thr_Player = std::jthread([&]()->void
 			{
+                std::cout << "create player thread id: " << std::this_thread::get_id() << std::endl;
+
+
 				auto& video_ptr = target->avframe_work[AVMEDIA_TYPE_VIDEO];
 				auto& audio_ptr = target->avframe_work[AVMEDIA_TYPE_AUDIO];
 				AVFrame*& frame = video_ptr.first;
@@ -139,6 +143,7 @@ namespace BaseSDL
                         std::this_thread::sleep_for(1ms);
                     }
 				}
+                std::cout << "exit player thread id: " << std::this_thread::get_id() << std::endl;
             });
 	}
 
@@ -179,18 +184,11 @@ namespace BaseSDL
 					switch (windowEvent.key.keysym.sym)
 					{
 					case SDLK_ESCAPE:
-
-						SDL_PauseAudio(1);
-						target->seek_time(10000000);
-						SDL_PauseAudio(0);
 						break;
 
 					case SDLK_SPACE:
-
-                        reverse_bit(target->local_thread,static_cast<uint8_t>(BaseFFmpeg::playing_thread));
-                        SDL_PauseAudio(target->local_thread & BaseFFmpeg::playing_thread);
-
-						break;
+                        BaseSDL::Global_VideoRunning::is_pause?BaseSDL::run():BaseSDL::stop();
+                        break;
 					default:
 						break;
 					}
@@ -225,7 +223,7 @@ namespace BaseSDL
 		}
 
 		len = audio_buflen > len ? len : audio_buflen;
-		memcpy(stream, audio_pos, len);
+        SDL_MixAudio(stream, audio_pos, len, volume);
 		audio_pos += len;
 		audio_buflen -= len;
 
@@ -246,7 +244,7 @@ namespace BaseSDL
 			if (target->init_swr() != BaseFFmpeg::SUCCESS) throw "init_swr() failed";
 			is_planner = true;
 		}
-
+        else is_planner = false;
 		if (map_audio_formot[format] == -1) throw "audio format is not suport!!!\n";
 
 		SDL_AudioSpec sdl_audio{ 0 };

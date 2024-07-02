@@ -117,7 +117,7 @@ public:
 	void insert_queue(AVMediaType index, AutoAVFramePtr&& avf) noexcept;
 	//从队列中取出并刷新工作指针的指向
 	bool flush_frame(AVMediaType index) noexcept;
-
+    //定位到对应的时间
 	void seek_time(int64_t usec)noexcept;
 
 
