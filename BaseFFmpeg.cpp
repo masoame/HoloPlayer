@@ -62,12 +62,12 @@ BaseFFmpeg::RESULT BaseFFmpeg::init_decode(const char* url, const AVInputFormat*
 
 BaseFFmpeg::RESULT BaseFFmpeg::init_encode(const char* url, const AVOutputFormat* fmt)
 {
-	//if(avformat_alloc_output_context2(&avfctx_output, fmt, url, nullptr)<0);
+    //if(avformat_alloc_output_context2(&avfctx_output, fmt, url, nullptr)<0);
 
-	//if (avio_open(&pFormatCtx->pb, outputPath, AVIO_FLAG_READ_WRITE) < 0) 
-		//LOGE("Failed to open output file! \n");
-		//return false;
-	//}
+    //if (avio_open(&pFormatCtx->pb, outputPath, AVIO_FLAG_READ_WRITE) < 0)
+        //LOGE("Failed to open output file! \n");
+        //return false;
+    //}
 
 	return RESULT();
 }
@@ -145,8 +145,7 @@ bool BaseFFmpeg::flush_frame(AVMediaType index) noexcept
 {
 
 	framedata_type* temp = nullptr;
-	while (!(temp = FrameQueue[index]->pop()))
-		std::this_thread::sleep_for(1ms);
+    if (!(temp = FrameQueue[index]->pop())) return false;
 
 	avframe_work[index].first.reset(temp->first.release());
 	avframe_work[index].second = temp->second.get();
@@ -158,6 +157,8 @@ void BaseFFmpeg::seek_time(int64_t sec) noexcept
 {
     stop(read_thread);
     stop(decode_thread);
+
+
     PacketQueue.clear();
     FrameQueue[AVMEDIA_TYPE_AUDIO]->clear();
     FrameQueue[AVMEDIA_TYPE_VIDEO]->clear();
@@ -176,8 +177,7 @@ void BaseFFmpeg::seek_time(int64_t sec) noexcept
     run(read_thread);
     run(decode_thread);
 
-    flush_frame(AVMEDIA_TYPE_VIDEO);
-    flush_frame(AVMEDIA_TYPE_AUDIO);
+    while(!flush_frame(AVMEDIA_TYPE_AUDIO)) std::this_thread::sleep_for(1ms);
 }
 
 void BaseFFmpeg::stop(char type) noexcept
@@ -204,15 +204,30 @@ void BaseFFmpeg::run(char type) noexcept
     if((type & decode_thread) && !(local_thread & decode_thread))
     {
         local_thread |= decode_thread;
-;       run_decode_thread.release();
+        run_decode_thread.release();
     }
+}
+
+void BaseFFmpeg::clear(char type) noexcept
+{
+    local_thread |= delete_thread;
+
+    if(type & read_thread)
+    {
+        local_thread &= ~read_thread;
+        if(ThrRead.joinable())ThrRead.join();
+    }
+    if(type & decode_thread)
+    {
+        local_thread &= ~decode_thread;
+        if(ThrDecode.joinable())ThrDecode.join();
+    }
+    local_thread &= ~delete_thread;
 }
 
 void BaseFFmpeg::clear() noexcept
 {
-    local_thread |= delete_thread;
-    local_thread &= ~read_thread;
-    local_thread &= ~decode_thread;
+    clear(read_thread | decode_thread);
 
     if(ThrRead.joinable())ThrRead.join();
     if(ThrDecode.joinable())ThrDecode.join();
@@ -239,11 +254,10 @@ void BaseFFmpeg::clear() noexcept
 BaseFFmpeg::RESULT BaseFFmpeg::start_read_thread() noexcept
 {
     local_thread = read_thread | decode_thread;
+
     ThrRead = std::jthread([&]()->void
 		{
-
             std::cout << "create read thread id: " << std::this_thread::get_id() << std::endl;
-
 			AutoAVPacketPtr avp;
             int err = AVERROR(EAGAIN);
             while (err != AVERROR_EOF)
@@ -291,17 +305,19 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
                     run_decode_thread.acquire();
                 }
 				AutoAVPacketPtr* avp;
-				while ((avp = PacketQueue.front()) == nullptr) std::this_thread::sleep_for(1ms);
+                while ((avp = PacketQueue.pop()) == nullptr)
+                    if(local_thread & decode_thread) std::this_thread::sleep_for(1ms);
+                    else continue;
 
 				AVMediaType index = AVStreamIndexToType[(*avp)->stream_index];
 				if (index == AVMEDIA_TYPE_VIDEO || index == AVMEDIA_TYPE_AUDIO)
 				{
                     while ((err = avcodec_send_packet(decode_ctx[index], *avp)) == AVERROR(EAGAIN))
-                        std::this_thread::sleep_for(1ms);
-					PacketQueue.pop();
+                        if(local_thread & decode_thread) std::this_thread::sleep_for(1ms);
+                        else continue;
                     while (true)
 					{
-						err = avcodec_receive_frame(decode_ctx[index], avf);
+                        err = avcodec_receive_frame(decode_ctx[index], avf);
                         if (err == 0) insert_queue(index, std::move(avf));
 						else if (err == AVERROR(EAGAIN)) break;
                         else if (err == AVERROR_EOF)
@@ -312,7 +328,7 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
                         else goto DECODE_END;
 					}
 				}
-				else { PacketQueue.pop(); }
+                else {  }
 			}
 
             DECODE_END:

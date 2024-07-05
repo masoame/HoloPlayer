@@ -2,6 +2,7 @@
 
 #include<semaphore>
 #include<thread>
+#include<queue>
 extern"C"
 {
 #include<libavformat/avformat.h>
@@ -80,8 +81,8 @@ public:
 
 	//构造函数
 	explicit BaseFFmpeg() {
-        FrameQueue[AVMEDIA_TYPE_VIDEO].reset(new Circular_Queue<framedata_type,4>);
-        FrameQueue[AVMEDIA_TYPE_AUDIO].reset(new Circular_Queue<framedata_type,4>);
+        FrameQueue[AVMEDIA_TYPE_VIDEO].reset(new Circular_Queue<framedata_type>);
+        FrameQueue[AVMEDIA_TYPE_AUDIO].reset(new Circular_Queue<framedata_type,5>);
 	};
 	//析构
     ~BaseFFmpeg() { clear(); };
@@ -125,6 +126,9 @@ public:
     void stop(char type) noexcept;
     //恢复线程
     void run(char type) noexcept;
+    //结束线程
+    void clear(char type) noexcept;
+
 	//关闭所有相关功能
     void clear() noexcept;
 private:
@@ -137,7 +141,9 @@ private:
 public:
 
 	std::unique_ptr<Circular_Queue_API<framedata_type>> FrameQueue[4];
-    Circular_Queue<AutoAVPacketPtr> PacketQueue;
+    Circular_Queue<AutoAVPacketPtr,9> PacketQueue;
+
+    //std::queue<AutoAVPacketPtr> PacketQueue;
 
     //本地线程状态（）
     uint8_t local_thread;

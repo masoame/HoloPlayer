@@ -1,7 +1,9 @@
 #ifndef HOLOMAINWINDOW_H
 #define HOLOMAINWINDOW_H
 #include <qmainwindow.h>
+
 #include "BaseSDL.h"
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class HoloMainWindow;
@@ -26,7 +28,7 @@ private slots:
 
     void on_time_slider_sliderMoved(int position);
 
-    void test();
+    void openvideo();
 
     void on_volume_slider_valueChanged(int value);
 

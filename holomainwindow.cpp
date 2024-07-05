@@ -4,7 +4,7 @@
 #include "QMessageBox"
 #include "qfiledialog.h"
 
-constexpr const char* str_StyleSheet_stop="                                                      \
+constexpr const char* str_StyleSheet_stop="             \
     QPushButton:!hover{                                 \
         border:none;                                    \
         image:url(:/Image/icon/Image/icon/page1.png)    \
@@ -19,7 +19,7 @@ constexpr const char* str_StyleSheet_stop="                                     
 }                                                       \
 ";
 
-constexpr const char* str_StyleSheet_run="                                                      \
+constexpr const char* str_StyleSheet_run="              \
     QPushButton:!hover{                                 \
         border:none;                                    \
         image:url(:/Image/icon/Image/icon/page3.png)    \
@@ -41,7 +41,7 @@ HoloMainWindow::HoloMainWindow(QWidget *parent)
     , ui(new Ui::HoloMainWindow)
 {
     ui->setupUi(this);
-    connect(ui->open_action,SIGNAL(triggered()),this,SLOT(test()));
+    connect(ui->open_action,SIGNAL(triggered()),this,SLOT(openvideo()));
     this->startTimer(250);
 
 }
@@ -104,7 +104,7 @@ void HoloMainWindow::on_time_slider_sliderMoved(int position)
     ui->timestamp->setText(QString::asprintf("%02d:%02d", position/60,position%60));
 }
 
-void HoloMainWindow::test()
+void HoloMainWindow::openvideo()
 {
     QString filepath = QFileDialog::getOpenFileName(this,tr("打开文件"),"./",tr("video files(*.mp4 *.mkv *.flv);;All files(*.*)"));
     if(filepath.isEmpty() || filepath=="")return;

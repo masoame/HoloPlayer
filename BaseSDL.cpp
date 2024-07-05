@@ -55,7 +55,7 @@ namespace BaseSDL
 		Uint8* audio_pos = nullptr;
 		int audio_buflen = 0;
         bool is_planner = false;
-        char volume = SDL_MIX_MAXVOLUME;
+        char volume = static_cast<char>(SDL_MIX_MAXVOLUME);
 	};
 
 	namespace Global_VideoRunning
@@ -97,13 +97,20 @@ namespace BaseSDL
 				AVFrame*& frame = video_ptr.first;
 
                 while (audio_ptr.first == nullptr) std::this_thread::sleep_for(1ms);
-				target->flush_frame(AVMEDIA_TYPE_VIDEO);
 
                 while (target->local_thread & BaseFFmpeg::playing_thread)
 				{
+                    if(is_pause)
+                    {
+                        wait_show_pause.release();
+                        run_show_thread.acquire();
+                    }
+
+                    while(!target->flush_frame(AVMEDIA_TYPE_VIDEO))
+                        if(!is_pause) std::this_thread::sleep_for(1ms);
+                        else continue;
+
 					int ret = 0;
-
-
 					switch (last_format) {
 					case SDL_PIXELFORMAT_IYUV:
 						if (frame->linesize[0] > 0 && frame->linesize[1] > 0 && frame->linesize[2] > 0) {
@@ -131,17 +138,17 @@ namespace BaseSDL
 					if (SDL_RenderCopy(SDL_renderer, SDL_texture, NULL, &rect))
 						return;
 
-                    SDL_RenderPresent(SDL_renderer);
-                    target->flush_frame(AVMEDIA_TYPE_VIDEO);
-                    while ((target->local_thread & BaseFFmpeg::playing_thread) && (frame->pts * target->secBaseVideo) >= (audio_ptr.first->pts * target->secBaseAudio))
+                    while ((frame->pts * target->secBaseVideo) >= (audio_ptr.first->pts * target->secBaseAudio))
                     {
-                        if(is_pause)
-                        {
-                            wait_show_pause.release();
-                            run_show_thread.acquire();
-                        }
-                        std::this_thread::sleep_for(1ms);
+                        if(target->FrameQueue[AVMEDIA_TYPE_VIDEO]->full() && target->FrameQueue[AVMEDIA_TYPE_AUDIO]->empty())
+                            target->flush_frame(AVMEDIA_TYPE_VIDEO);
+                        if(!is_pause) std::this_thread::sleep_for(1ms);
+                        else break;
                     }
+
+
+                    SDL_RenderPresent(SDL_renderer);
+
 				}
                 std::cout << "exit player thread id: " << std::this_thread::get_id() << std::endl;
             });
@@ -209,17 +216,13 @@ namespace BaseSDL
 		SDL_memset(stream, 0, len);
 		if (audio_buflen == 0)
 		{
-			if (target->flush_frame(AVMEDIA_TYPE_AUDIO))
-			{
-				if (is_planner)audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second);
-				else audio_buf = audio_frame.first->data[0];
+            while (!target->flush_frame(AVMEDIA_TYPE_AUDIO)) std::this_thread::sleep_for(1ms);
 
-				audio_pos = audio_buf;
-				audio_buflen = audio_frame.first->linesize[0];
-			}
-			else {
-				SDL_CloseAudio(); return;
-			}
+            if (is_planner)audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second);
+            else audio_buf = audio_frame.first->data[0];
+            audio_pos = audio_buf;
+            audio_buflen = audio_frame.first->linesize[0];
+
 		}
 
 		len = audio_buflen > len ? len : audio_buflen;
