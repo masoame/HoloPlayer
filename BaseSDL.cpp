@@ -85,6 +85,7 @@ namespace BaseSDL
 
     void StartPlayer() noexcept
 	{
+        is_pause=true;
         close();
         target->local_thread |= BaseFFmpeg::playing_thread;
         Thr_Player = std::jthread([&]()->void
@@ -125,7 +126,7 @@ namespace BaseSDL
 						}
 						else {
 							av_log(NULL, AV_LOG_ERROR, "Mixed negative and positive linesizes are not supported.\n");
-							return ;
+                            goto PLAYING_END;
 						}
 						break;
 					default:
@@ -135,8 +136,7 @@ namespace BaseSDL
 							ret = SDL_UpdateTexture(SDL_texture, NULL, frame->data[0], frame->linesize[0]);
 						break;
 					}
-					if (SDL_RenderCopy(SDL_renderer, SDL_texture, NULL, &rect))
-						return;
+                    if (SDL_RenderCopy(SDL_renderer, SDL_texture, NULL, &rect)) goto PLAYING_END;
 
                     while ((frame->pts * target->secBaseVideo) >= (audio_ptr.first->pts * target->secBaseAudio))
                     {
@@ -145,11 +145,11 @@ namespace BaseSDL
                         if(!is_pause) std::this_thread::sleep_for(1ms);
                         else break;
                     }
-
-
                     SDL_RenderPresent(SDL_renderer);
 
 				}
+                PLAYING_END:
+                Thr_Player.detach();
                 std::cout << "exit player thread id: " << std::this_thread::get_id() << std::endl;
             });
 	}
@@ -176,6 +176,7 @@ namespace BaseSDL
 		if (is_planner)
 			target->sample_planner_to_packed(work, reinterpret_cast<uint8_t**>(&buf), &work->linesize[0]);
 	}
+
 	void KeyMouseCallEvent() noexcept
 	{
 		SDL_Event windowEvent;
@@ -233,7 +234,6 @@ namespace BaseSDL
 		return;
 	}
 
-
     void InitAudio(SDL_AudioCallback callback)
 	{
         SDL_CloseAudio();
@@ -286,10 +286,9 @@ namespace BaseSDL
 		rect.h = video_ctx->height;
 	}
 
-
     void stop() noexcept
     {
-        if(is_pause==false)
+        if(Thr_Player.joinable() && is_pause==false)
         {
             SDL_PauseAudio(1);
             is_pause=true;
@@ -299,7 +298,7 @@ namespace BaseSDL
 
     void run() noexcept
     {
-        if(is_pause==true)
+        if(Thr_Player.joinable() && is_pause==true)
         {
             is_pause=false;
             run_show_thread.release();
@@ -307,7 +306,6 @@ namespace BaseSDL
         }
 
     }
-
 
     extern void close() noexcept
     {

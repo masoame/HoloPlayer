@@ -25,7 +25,7 @@ struct AutoPtr
     operator bool() const noexcept { return _ptr.get() != nullptr; }
 
 
-    T** operator&() { static_assert(sizeof(*this) == sizeof(void*)); assert(_ptr); return reinterpret_cast<T**>(this); }
+    T** operator&() { static_assert(sizeof(*this) == sizeof(void*)); return reinterpret_cast<T**>(this); }
     T* operator->() const noexcept { return _ptr.get(); }
 
 

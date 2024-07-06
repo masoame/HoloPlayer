@@ -163,6 +163,8 @@ void BaseFFmpeg::seek_time(int64_t sec) noexcept
     FrameQueue[AVMEDIA_TYPE_AUDIO]->clear();
     FrameQueue[AVMEDIA_TYPE_VIDEO]->clear();
 
+    avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_VIDEO]);
+    avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_AUDIO]);
 
     if (avformat_seek_file(avfctx_input, -1,  INT64_MIN, sec * AV_TIME_BASE, sec * AV_TIME_BASE, AVSEEK_FLAG_BACKWARD) < 0)
     {
@@ -171,23 +173,22 @@ void BaseFFmpeg::seek_time(int64_t sec) noexcept
         return;
     }
 
-    avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_VIDEO]);
-    avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_AUDIO]);
-
-    run(read_thread);
-    run(decode_thread);
+    if(!ThrRead.joinable()) start_read_thread();
+    else run(read_thread);
+    if(!ThrDecode.joinable()) start_decode_thread();
+    else run(decode_thread);
 
     while(!flush_frame(AVMEDIA_TYPE_AUDIO)) std::this_thread::sleep_for(1ms);
 }
 
 void BaseFFmpeg::stop(char type) noexcept
 {
-    if((type & read_thread) && (local_thread & read_thread))
+    if(ThrRead.joinable() && (type & read_thread) && (local_thread & read_thread))
     {
         local_thread &= ~read_thread;
         wait_read_pause.acquire();
     }
-    if((type & decode_thread) && (local_thread & decode_thread))
+    if(ThrRead.joinable() && (type & decode_thread) && (local_thread & decode_thread))
     {
         local_thread &= ~decode_thread;
         wait_decode_pause.acquire();
@@ -196,12 +197,12 @@ void BaseFFmpeg::stop(char type) noexcept
 }
 void BaseFFmpeg::run(char type) noexcept
 {
-    if((type & read_thread) && !(local_thread & read_thread))
+    if(ThrRead.joinable() && (type & read_thread) && !(local_thread & read_thread))
     {
         local_thread |= read_thread;
         run_read_thread.release();
     }
-    if((type & decode_thread) && !(local_thread & decode_thread))
+    if(ThrRead.joinable() && (type & decode_thread) && !(local_thread & decode_thread))
     {
         local_thread |= decode_thread;
         run_decode_thread.release();
@@ -253,8 +254,7 @@ void BaseFFmpeg::clear() noexcept
 
 BaseFFmpeg::RESULT BaseFFmpeg::start_read_thread() noexcept
 {
-    local_thread = read_thread | decode_thread;
-
+    local_thread |=read_thread;
     ThrRead = std::jthread([&]()->void
 		{
             std::cout << "create read thread id: " << std::this_thread::get_id() << std::endl;
@@ -282,6 +282,9 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_read_thread() noexcept
                 }
 			}
             READ_END:
+            local_thread &= ~read_thread;
+            PacketQueue.push(nullptr);
+            ThrRead.detach();
             std::cout << "exit read thread id: " << std::this_thread::get_id() << std::endl;
     });
     return SUCCESS;
@@ -289,6 +292,7 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_read_thread() noexcept
 
 BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
 {
+    local_thread |=decode_thread;
     ThrDecode = std::jthread([&]()->void
 		{
             std::cout << "create decode thread id: " << std::this_thread::get_id() << std::endl;
@@ -309,12 +313,15 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
                     if(local_thread & decode_thread) std::this_thread::sleep_for(1ms);
                     else continue;
 
+                if((*avp).get()==nullptr){local_thread &= ~playing_thread; goto DECODE_END;}
+
 				AVMediaType index = AVStreamIndexToType[(*avp)->stream_index];
 				if (index == AVMEDIA_TYPE_VIDEO || index == AVMEDIA_TYPE_AUDIO)
 				{
                     while ((err = avcodec_send_packet(decode_ctx[index], *avp)) == AVERROR(EAGAIN))
                         if(local_thread & decode_thread) std::this_thread::sleep_for(1ms);
                         else continue;
+
                     while (true)
 					{
                         err = avcodec_receive_frame(decode_ctx[index], avf);
@@ -332,6 +339,8 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
 			}
 
             DECODE_END:
+            local_thread &= ~decode_thread;
+            ThrDecode.detach();
             std::cout << "exit decode thread id: " << std::this_thread::get_id() << std::endl;
         });
 		return SUCCESS;

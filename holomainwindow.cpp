@@ -56,7 +56,8 @@ void HoloMainWindow::on_stop_play_clicked()
 {
     if(BaseSDL::target == nullptr) return;
 
-    BaseSDL::Global_VideoRunning::is_pause?BaseSDL::run():BaseSDL::stop();
+    if(BaseSDL::Thr_Player.joinable())BaseSDL::Global_VideoRunning::is_pause?BaseSDL::run():BaseSDL::stop();
+    else BaseSDL::StartPlayer();
 
     if(BaseSDL::Global_VideoRunning::is_pause)
     ui->stop_play->setStyleSheet(str_StyleSheet_stop);
