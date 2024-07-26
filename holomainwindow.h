@@ -22,19 +22,20 @@ private slots:
 
     void on_stop_play_clicked();
 
-    void on_time_slider_sliderPressed();
-
     void on_time_slider_sliderReleased();
 
     void on_time_slider_sliderMoved(int position);
 
-    void openvideo();
-
     void on_volume_slider_valueChanged(int value);
+
+    void StartOpenFile();
+
+    void StartNetMode();
 
 private:
     Ui::HoloMainWindow *ui;
-    BaseFFmpeg ffmpeg_dirver;
+    BaseFFmpeg::PlayTool ffmpeg_dirver;
+    int timer_id;
 protected:
     void timerEvent(QTimerEvent * event) override;
 };

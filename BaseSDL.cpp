@@ -46,8 +46,7 @@ namespace BaseSDL
 		{ AV_PIX_FMT_NONE,           SDL_PIXELFORMAT_UNKNOWN }
 	};
 
-	BaseFFmpeg* target = nullptr;
-    std::jthread Thr_Player;
+	BaseFFmpeg::PlayTool* target = nullptr;
 
 	namespace Global_AudioRunning
 	{
@@ -65,15 +64,12 @@ namespace BaseSDL
 		AutoTexturePtr SDL_texture;
 		SDL_Rect rect{0};
 		SDL_PixelFormatEnum last_format = SDL_PIXELFORMAT_IYUV;
-
-        bool is_pause = true;
         std::binary_semaphore wait_show_pause{0};
         std::binary_semaphore run_show_thread{0};
 	};
 
-    void InitPlayer(BaseFFmpeg& rely, const char* WindowName, SDL_AudioCallback callback)
+    void InitPlayer(BaseFFmpeg::PlayTool& rely, const char* WindowName, SDL_AudioCallback callback)
 	{
-        is_pause=true;
 		target = &rely;
 		InitAudio(callback);
 		InitVideo(WindowName);
@@ -85,31 +81,38 @@ namespace BaseSDL
 
     void StartPlayer() noexcept
 	{
-        is_pause=true;
-        close();
-        target->local_thread |= BaseFFmpeg::playing_thread;
-        Thr_Player = std::jthread([&]()->void
+		target->clear(playing_thread);
+		SDL_PauseAudio(0);
+
+        target->local_thread |= playing_thread;
+
+        target->ThrPlay = std::jthread([&]()->void
 			{
                 std::cout << "create player thread id: " << std::this_thread::get_id() << std::endl;
 
-
-				auto& video_ptr = target->avframe_work[AVMEDIA_TYPE_VIDEO];
+				auto& frame = target->avframe_work[AVMEDIA_TYPE_VIDEO].first;
 				auto& audio_ptr = target->avframe_work[AVMEDIA_TYPE_AUDIO];
-				AVFrame*& frame = video_ptr.first;
+				auto& secBaseVideo = target->secBaseTime[AVMEDIA_TYPE_VIDEO];
+				auto& secBaseAudio = target->secBaseTime[AVMEDIA_TYPE_AUDIO];
 
                 while (audio_ptr.first == nullptr) std::this_thread::sleep_for(1ms);
 
-                while (target->local_thread & BaseFFmpeg::playing_thread)
+                while (true)
 				{
-                    if(is_pause)
-                    {
-                        wait_show_pause.release();
-                        run_show_thread.acquire();
-                    }
 
-                    while(!target->flush_frame(AVMEDIA_TYPE_VIDEO))
-                        if(!is_pause) std::this_thread::sleep_for(1ms);
-                        else continue;
+                    while (!target->flush_frame(AVMEDIA_TYPE_VIDEO))
+                        if (target->local_thread & BaseFFmpeg::playing_thread) std::this_thread::sleep_for(1ms);
+                        else break;
+
+                    if (frame == nullptr)
+                        goto PLAYING_END;
+
+                    if(!(target->local_thread & BaseFFmpeg::playing_thread))
+                    {
+						if (target->local_thread & BaseFFmpeg::delete_thread) goto PLAYING_END;
+                        target->wait_play_pause.release();
+						target->run_play_thread.acquire();
+                    }
 
 					int ret = 0;
 					switch (last_format) {
@@ -138,18 +141,19 @@ namespace BaseSDL
 					}
                     if (SDL_RenderCopy(SDL_renderer, SDL_texture, NULL, &rect)) goto PLAYING_END;
 
-                    while ((frame->pts * target->secBaseVideo) >= (audio_ptr.first->pts * target->secBaseAudio))
+                    while ((frame->pts * secBaseVideo) >= (audio_ptr.first->pts * secBaseAudio))
                     {
                         if(target->FrameQueue[AVMEDIA_TYPE_VIDEO]->full() && target->FrameQueue[AVMEDIA_TYPE_AUDIO]->empty())
                             target->flush_frame(AVMEDIA_TYPE_VIDEO);
-                        if(!is_pause) std::this_thread::sleep_for(1ms);
+                        if(target->local_thread & BaseFFmpeg::playing_thread) std::this_thread::sleep_for(1ms);
                         else break;
                     }
                     SDL_RenderPresent(SDL_renderer);
 
 				}
                 PLAYING_END:
-                Thr_Player.detach();
+                target->ThrPlay.detach();
+				target->local_thread &= ~BaseFFmpeg::playing_thread;
                 std::cout << "exit player thread id: " << std::this_thread::get_id() << std::endl;
             });
 	}
@@ -180,6 +184,10 @@ namespace BaseSDL
 	void KeyMouseCallEvent() noexcept
 	{
 		SDL_Event windowEvent;
+
+		auto& secBaseVideo = target->secBaseTime[AVMEDIA_TYPE_VIDEO];
+		auto& secBaseAudio = target->secBaseTime[AVMEDIA_TYPE_AUDIO];
+
         while (true)
 		{
 
@@ -193,10 +201,33 @@ namespace BaseSDL
 					{
 					case SDLK_ESCAPE:
 						break;
-
 					case SDLK_SPACE:
-                        BaseSDL::Global_VideoRunning::is_pause?BaseSDL::run():BaseSDL::stop();
+						if (target == nullptr) break;
+						if (target->local_thread & playing_thread)
+						{
+							SDL_PauseAudio(1);
+							target->stop(playing_thread);
+						}
+						else
+						{
+							SDL_PauseAudio(0);
+							target->run(playing_thread);
+						}
+
+
                         break;
+
+					case SDLK_LEFT:
+
+						target->seek_time(target->avframe_work[AVMEDIA_TYPE_AUDIO].first->pts * secBaseAudio - 5);
+
+						break;
+					case SDLK_RIGHT:
+
+						target->seek_time(target->avframe_work[AVMEDIA_TYPE_AUDIO].first->pts * secBaseAudio + 5);
+
+						break;
+
 					default:
 						break;
 					}
@@ -217,7 +248,9 @@ namespace BaseSDL
 		SDL_memset(stream, 0, len);
 		if (audio_buflen == 0)
 		{
-            while (!target->flush_frame(AVMEDIA_TYPE_AUDIO)) std::this_thread::sleep_for(1ms);
+            while (!target->flush_frame(AVMEDIA_TYPE_AUDIO) && (target->local_thread & playing_thread)) std::this_thread::sleep_for(1ms);
+
+            if(!(target->local_thread & playing_thread)) return;
 
             if (is_planner)audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second);
             else audio_buf = audio_frame.first->data[0];
@@ -280,52 +313,19 @@ namespace BaseSDL
 		SDL_texture = SDL_CreateTexture(SDL_renderer, last_format, SDL_TEXTUREACCESS_STREAMING, video_ctx->width, video_ctx->height);
 		if (SDL_texture == nullptr) throw "texture create failed";
 
-		rect.x = 0;
-		rect.y = 0;
-		rect.w = video_ctx->width;
-		rect.h = video_ctx->height;
+
+		rect.w = target->decode_ctx[AVMEDIA_TYPE_VIDEO]->width;
+		rect.h = target->decode_ctx[AVMEDIA_TYPE_VIDEO]->height;
 	}
-
-    void stop() noexcept
-    {
-        if(Thr_Player.joinable() && is_pause==false)
-        {
-            SDL_PauseAudio(1);
-            is_pause=true;
-            wait_show_pause.acquire();
-        }
-    }
-
-    void run() noexcept
-    {
-        if(Thr_Player.joinable() && is_pause==true)
-        {
-            is_pause=false;
-            run_show_thread.release();
-            SDL_PauseAudio(0);
-        }
-
-    }
-
-    extern void close() noexcept
-    {
-        if(Thr_Player.joinable())
-        {
-            stop();
-            target->local_thread &= ~BaseFFmpeg::playing_thread;
-            run();
-            Thr_Player.join();
-        }
-    }
 
     void Destroy() noexcept
     {
-        close();
+        target->clear();
         SDL_CloseAudio();
         SDL_texture.reset(nullptr);
         SDL_renderer.reset(nullptr);
         SDL_win.reset(nullptr);
-        delete target;
+        target = nullptr;
     }
 
 }

@@ -1,8 +1,4 @@
 #pragma once
-
-#include<semaphore>
-#include<thread>
-#include<queue>
 extern"C"
 {
 #include<libavformat/avformat.h>
@@ -13,15 +9,16 @@ extern"C"
 #include<libswresample/swresample.h>
 #include<libavutil/channel_layout.h>
 }
-
-
 #include"common.hpp"
 #include"Cirucular_Queue.hpp"
-#include<windows.h>
 
-class BaseFFmpeg
+#include<semaphore>
+#include<thread>
+
+
+namespace BaseFFmpeg
 {
-public:
+	//管理内存的智能指针
 	using AutoAVPacketPtr = AutoPtr<AVPacket, Functor<av_packet_free>, true>;
 	using AutoAVCodecContextPtr = AutoPtr<AVCodecContext, Functor<avcodec_free_context>, true>;
 	using AutoAVFormatContextPtr = AutoPtr<AVFormatContext, Functor<avformat_free_context>, false>;
@@ -32,9 +29,8 @@ public:
 	//函数回调类型
 	using insert_callback_type = void (*)(AVFrame*&, char*& buf) noexcept;
 
-
-    using framedata_type = std::pair<AutoAVFramePtr, std::unique_ptr<char[]>>;
-    using auto_framedata_type = std::pair<AutoAVFramePtr, char*>;
+	using framedata_type = std::pair<AutoAVFramePtr, std::unique_ptr<char[]>>;
+	using auto_framedata_type = std::pair<AutoAVFramePtr, char*>;
 	//错误枚举
 	enum RESULT
 	{
@@ -43,134 +39,138 @@ public:
 		UNNEED_SWR
 	};
 
+	//流类型
 	enum ios :char
 	{
-		in = 0x0,
-		out = 0x1,
-		video = 0x0,
-		audio = 0x02
+		in = 0x1,
+		out = 0x2,
+		io = in | out,
+		video = 0x4,
+		audio = 0x8
 	};
-	
-    enum thread_type: char
+
+	//线程类型
+	enum thread_type : char
 	{
-        playing_thread=0x01,
-        read_thread=0x02,
-        decode_thread=0x04,
-        delete_thread=0x08
+		playing_thread = 0x01,
+		read_thread = 0x02,
+		decode_thread = 0x04,
+		delete_thread = 0x08
 	};
 
-	//sample_bit_size[AVSampleFormat(音频采样格式)] == 采样点的大小
-	static inline constexpr const char sample_bit_size[13]{ 1,2,4,4,8,1,2,4,4,8,8,8,-1 };
-	//planner转化为对应的packed(AV_SAMPLE_FMT_NONE为错误格式)
-	static inline constexpr const AVSampleFormat map_palnner_to_packad[13]
+	//输入或输出帧格式
+	typedef struct MediaType
 	{
-	AV_SAMPLE_FMT_NONE,
-	AV_SAMPLE_FMT_NONE,
-	AV_SAMPLE_FMT_NONE,
-	AV_SAMPLE_FMT_NONE,
-	AV_SAMPLE_FMT_NONE,
-	AV_SAMPLE_FMT_U8,
-	AV_SAMPLE_FMT_S16,
-	AV_SAMPLE_FMT_S32,
-	AV_SAMPLE_FMT_FLT,
-	AV_SAMPLE_FMT_DBL,
-	AV_SAMPLE_FMT_NONE,
-	AV_SAMPLE_FMT_S64,
-	AV_SAMPLE_FMT_NONE
+		int w, h;
+		AVPixelFormat video_type;
+		AVSampleFormat audio_type;
+	}IOMediaType;
+
+	extern const char sample_bit_size[13];
+	extern const AVSampleFormat map_palnner_to_packad[13];
+
+	//播放工具类
+	class PlayTool
+	{
+	public:
+
+		explicit PlayTool() {
+			FrameQueue[AVMEDIA_TYPE_VIDEO].reset(new Circular_Queue<framedata_type>);
+			FrameQueue[AVMEDIA_TYPE_AUDIO].reset(new Circular_Queue<framedata_type, 5>);
+		};
+		~PlayTool() { clear(); };
+
+		//打开流
+        RESULT open(const char* srcUrl, const char* dstUrl = nullptr, unsigned char type = in | video | audio);
+		//初始化各种编解码器
+		RESULT init_decode(AVMediaType type);
+		//初始化编码器
+		RESULT init_encode(AVMediaType type);
+
+		//初始化音频重采样(planner到packed格式转化)
+		RESULT init_swr();
+		//转化函数(planner到packed格式转化)
+		RESULT sample_planner_to_packed(AVFrame* frame, uint8_t** data, int* linesize);
+		//帧格式转化
+		RESULT init_sws(AVFrame* work, const AVPixelFormat dstFormat = AV_PIX_FMT_YUV420P, const int dstW = 0, const int dstH = 0);
+		//转化为
+		RESULT sws_scale_420P(AVFrame*& data);
+		//本地音视频解码
+		RESULT start_read_thread() noexcept;
+		RESULT start_decode_thread() noexcept;
+		//本地音视频编码
+		RESULT start_encode_thread() noexcept;
+		//音视频拉流解码线程
+		RESULT start_pull_steam_thread() noexcept;
+
+		//插入队列
+		void insert_queue(AVMediaType index, AutoAVFramePtr&& avf) noexcept;
+		//从队列中取出并刷新工作指针的指向
+		bool flush_frame(AVMediaType index) noexcept;
+		//定位到对应的时间
+		void seek_time(int64_t usec)noexcept;
+		//暂停线程
+		void stop(char type) noexcept;
+		//恢复线程
+		void run(char type) noexcept;
+		//结束线程
+		void clear(char type) noexcept;
+		//关闭所有相关功能
+		void clear() noexcept;
+
+	public:
+		
+		//视频帧,音频帧，字幕帧队列[AVMediaType]
+		std::unique_ptr<Circular_Queue_API<framedata_type>> FrameQueue[3];
+		//读取到包管理队列
+		Circular_Queue<AutoAVPacketPtr, 8> PacketQueue;
+
+		//本地线程状态
+		uint8_t local_thread;
+		//输入输出格式指针
+		AutoAVFormatContextPtr avfctx_input, avfctx_output;
+		//解码上下文指针
+		AutoAVCodecContextPtr decode_ctx[3];
+		//编码上下文指针
+		AutoAVCodecContextPtr encode_ctx[3];
+
+		//图像帧转化上下文
+		AutoSwsContextPtr sws_ctx;
+		//音频解码上下文
+		AutoSwrContextPtr swr_ctx;
+
+		//各个工作帧
+		auto_framedata_type avframe_work[6];
+
+		//insert_callback[AVMediaType(帧格式)] == 处理函数指针
+		insert_callback_type insert_callback[6]{ 0 };
+
+		// AVStreamIndexToType[流的索引] == 流类型
+		AVMediaType AVStreamIndexToType[6]{ AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN,AVMEDIA_TYPE_UNKNOWN };
+
+		// AVTypeToStreamIndex[流类型] == 流的索引
+		int AVTypeToStreamIndex[6]{ -1,-1,-1,-1,-1,-1 };
+
+		//各个流的时间基
+		double secBaseTime[3];
+
+		//读取Packet线程
+		std::jthread ThrRead;
+		std::binary_semaphore wait_read_pause{ 0 };
+		std::binary_semaphore run_read_thread{ 0 };
+
+		//解码Packet线程
+		std::jthread ThrDecode;
+		std::binary_semaphore wait_decode_pause{ 0 };
+		std::binary_semaphore run_decode_thread{ 0 };
+
+		// 播放线程
+		std::jthread ThrPlay;
+		std::binary_semaphore wait_play_pause{ 0 };
+		std::binary_semaphore run_play_thread{ 0 };
 	};
-
-	//构造函数
-	explicit BaseFFmpeg() {
-        FrameQueue[AVMEDIA_TYPE_VIDEO].reset(new Circular_Queue<framedata_type>);
-        FrameQueue[AVMEDIA_TYPE_AUDIO].reset(new Circular_Queue<framedata_type,5>);
-	};
-	//析构
-    ~BaseFFmpeg() { clear(); };
-
-	//打开流
-	RESULT open(const char* url, byte type = in | video);
-
-	//初始化您编解码器
-	RESULT init_decode(const char* url, const AVInputFormat* fmt = nullptr, AVDictionary** options = nullptr);
-	//初始化编码器
-	RESULT init_encode(const char* url, const AVOutputFormat* fmt = nullptr);
-
-	//初始化音频重采样(planner到packed格式转化)
-	RESULT init_swr();
-	//转化函数(planner到packed格式转化)
-	RESULT sample_planner_to_packed(AVFrame* frame, uint8_t** data, int* linesize);
-
-	//帧格式转化
-	RESULT init_sws(AVFrame* work, const AVPixelFormat dstFormat = AV_PIX_FMT_YUV420P, const int dstW = 0, const int dstH = 0);
-	//转化为
-	RESULT sws_scale_420P(AVFrame*& data);
-
-	//本地音视频解码
-	RESULT start_read_thread() noexcept;
-	RESULT start_decode_thread() noexcept;
-	//本地音视频编码
-	RESULT start_encode_thread() noexcept;
-
-	//音视频拉流解码线程
-	RESULT start_pull_steam_thread() noexcept;
-
-	//插入队列
-	void insert_queue(AVMediaType index, AutoAVFramePtr&& avf) noexcept;
-	//从队列中取出并刷新工作指针的指向
-	bool flush_frame(AVMediaType index) noexcept;
-    //定位到对应的时间
-	void seek_time(int64_t usec)noexcept;
+}
 
 
-    //暂停线程
-    void stop(char type) noexcept;
-    //恢复线程
-    void run(char type) noexcept;
-    //结束线程
-    void clear(char type) noexcept;
-
-	//关闭所有相关功能
-    void clear() noexcept;
-private:
-
-	AutoSwrContextPtr swr_ctx;
 
 
-	//队列用于存放帧数据
-
-public:
-
-	std::unique_ptr<Circular_Queue_API<framedata_type>> FrameQueue[4];
-    Circular_Queue<AutoAVPacketPtr,9> PacketQueue;
-
-    //std::queue<AutoAVPacketPtr> PacketQueue;
-
-    //本地线程状态（）
-    uint8_t local_thread;
-	//输入输出格式指针
-	AutoAVFormatContextPtr avfctx_input, avfctx_output;
-	//解码上下文指针
-	AutoAVCodecContextPtr decode_ctx[4];
-	//编码上下文指针
-	AutoAVCodecContextPtr encode_ctx[4];
-	//图像帧转化上下文
-	AutoSwsContextPtr sws_ctx;
-	//各个工作帧
-    auto_framedata_type avframe_work[6];
-	//insert_callback[AVMediaType(帧格式)] == 处理函数指针
-	insert_callback_type insert_callback[6]{ 0 };
-	// AVStreamIndexToType[流的索引] == 流类型
-	AVMediaType AVStreamIndexToType[6]{ AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN,AVMEDIA_TYPE_UNKNOWN };
-	// AVTypeToStreamIndex[流类型] == 流的索引
-	int AVTypeToStreamIndex[6]{ -1,-1,-1,-1,-1,-1 };
-
-	double secBaseVideo = 0 , secBaseAudio = 0;
-
-    std::jthread ThrRead;
-    std::binary_semaphore wait_read_pause{0};
-    std::binary_semaphore run_read_thread{0};
-
-    std::jthread ThrDecode;
-    std::binary_semaphore wait_decode_pause{0};
-    std::binary_semaphore run_decode_thread{0};
-};

@@ -7,7 +7,6 @@ int main(int argc, char* args[])
     HoloMainWindow w;
     w.show();
     return app.exec();
-
 }
 
 

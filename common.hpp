@@ -1,15 +1,22 @@
 #pragma once
+
+#ifdef _WIN32
+    #include<windows.h>
+#elif __linux__
+
+#else
+    #error "Unknown"
+#endif 
+
 #include<type_traits>
-#include<assert.h>
 #include<memory>
 
 template <auto F>
 using Functor = std::integral_constant<std::remove_reference_t<decltype(F)>, F>;
 
-template<class T = void, class FreeFunc = Functor<free>, bool isSecPtr = false>
+template<class T, class FreeFunc, bool isSecPtr = false>
 struct AutoPtr
 {
-
     AutoPtr() noexcept {}
     AutoPtr(AutoPtr& Autoptr) = delete;
     explicit AutoPtr(AutoPtr&& Autoptr) noexcept : _ptr(Autoptr.release()) {}
@@ -26,6 +33,7 @@ struct AutoPtr
 
 
     T** operator&() { static_assert(sizeof(*this) == sizeof(void*)); return reinterpret_cast<T**>(this); }
+ 
     T* operator->() const noexcept { return _ptr.get(); }
 
 

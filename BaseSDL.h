@@ -11,6 +11,7 @@ extern"C"
 
 namespace BaseSDL
 {
+	using namespace BaseFFmpeg;
 	using namespace std::chrono_literals;
 
 	using AutoWindowPtr = AutoPtr<SDL_Window, Functor<SDL_DestroyWindow>, false>;
@@ -23,7 +24,7 @@ namespace BaseSDL
 	extern const std::map<AVPixelFormat, SDL_PixelFormatEnum> map_video_format;
 
 	//指向对应FFmpeg封装层的指针
-	extern BaseFFmpeg* target;
+	extern PlayTool* target;
     extern std::jthread Thr_Player;
 
 	namespace Global_AudioRunning
@@ -52,13 +53,6 @@ namespace BaseSDL
 		extern SDL_Rect rect;
 		//SDL材质选择
 		extern SDL_PixelFormatEnum last_format;
-
-        //停止信号量
-        extern std::binary_semaphore wait_show_pause;
-        //开始信号量
-        extern std::binary_semaphore run_show_thread;
-        //是否停止
-        extern bool is_pause;
 	};
 
 	//处理画面帧回调封装
@@ -77,15 +71,9 @@ namespace BaseSDL
 	extern void SDLCALL default_callback(void* userdata, Uint8* stream, int len) noexcept;
 
 	//初始化播放环境
-	extern void InitPlayer(BaseFFmpeg& rely, const char* WindowName, SDL_AudioCallback callback = default_callback);
+	extern void InitPlayer(BaseFFmpeg::PlayTool& rely, const char* WindowName, SDL_AudioCallback callback = default_callback);
 	//开始播放
     extern void StartPlayer() noexcept;
-    //暂停线程
-    extern void stop() noexcept;
-    //运行线程
-    extern void run() noexcept;
-    //关闭
-    extern void close() noexcept;
     //销毁
     extern void Destroy() noexcept;
 };

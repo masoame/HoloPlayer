@@ -11,11 +11,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #set(CMAKE_CXX_FLAGS "-O3")
 
 set(LIB_DIR ${PROJECT_SOURCE_DIR}/lib)
-set(DLL_DIR ${PROJECT_SOURCE_DIR}/bin)
+#set(DLL_DIR ${PROJECT_SOURCE_DIR}/bin)
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
-file(GLOB LIB_FILE ${LIB_DIR}/*.lib)
+file(GLOB LIB_FILE ${LIB_DIR}/*.lib ${LIB_DIR}/*.a)
 
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
@@ -39,6 +39,11 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         BaseFFmpeg.cpp BaseSDL.cpp holomainwindow.cpp
         Img.qrc
         Cirucular_Queue.hpp
+        nettofiledialog.h nettofiledialog.cpp nettofiledialog.ui
+
+        EncodeString.hpp
+        SpiderVideo.h ParseJson.h
+        ParseJson.cpp SpiderVideo.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET holoPlayer APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

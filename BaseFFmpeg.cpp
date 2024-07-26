@@ -1,66 +1,79 @@
 #include"BaseFFmpeg.h"
-
 #include<iostream>
 
+using namespace BaseFFmpeg;
 using namespace std::chrono_literals;
 
-BaseFFmpeg::RESULT BaseFFmpeg::open(const char* url, byte type)
+
+//sample_bit_size[AVSampleFormat(音频采样格式)] == 采样点的大小
+constexpr const char BaseFFmpeg::sample_bit_size[13]{ 1,2,4,4,8,1,2,4,4,8,8,8,-1 };
+//planner转化为对应的packed(AV_SAMPLE_FMT_NONE为错误格式)
+constexpr const AVSampleFormat BaseFFmpeg::map_palnner_to_packad[13]
+{
+    AV_SAMPLE_FMT_NONE,
+    AV_SAMPLE_FMT_NONE,
+    AV_SAMPLE_FMT_NONE,
+    AV_SAMPLE_FMT_NONE,
+    AV_SAMPLE_FMT_NONE,
+    AV_SAMPLE_FMT_U8,
+    AV_SAMPLE_FMT_S16,
+    AV_SAMPLE_FMT_S32,
+    AV_SAMPLE_FMT_FLT,
+    AV_SAMPLE_FMT_DBL,
+    AV_SAMPLE_FMT_NONE,
+    AV_SAMPLE_FMT_S64,
+    AV_SAMPLE_FMT_NONE
+};
+
+
+
+RESULT PlayTool::open(const char* srcUrl, const char* dstUrl, unsigned char type)
 {
     this->clear();
 
-	switch (type)
-	{
-	case in|video:
-		init_decode(url);
-		break;
-	case in|audio:
+    if (type & in)
+    {
+        avfctx_input = avformat_alloc_context();
+        if (avformat_open_input(&avfctx_input, srcUrl, nullptr, nullptr)) return OPEN_ERROR;
+        if (avformat_find_stream_info(avfctx_input, nullptr) < 0) return ARGS_ERROR;
 
-		break;
-	case out|video:
+        av_dump_format(avfctx_input, 0, srcUrl, false);
 
-		break;
-	case out|audio:
+        if (type & video)
+            init_decode(AVMEDIA_TYPE_VIDEO);
+        if (type & audio)
+            init_decode(AVMEDIA_TYPE_AUDIO);
+       
+    }
+    if (type & out)
+    {
+        avfctx_output = avformat_alloc_context();
+        if (avformat_alloc_output_context2(&avfctx_output, nullptr, dstUrl, nullptr) < 0) {};
 
-		break;
-	default:
-		break;
-	}
+    }
+
+
 	return SUCCESS;
 }
 
-BaseFFmpeg::RESULT BaseFFmpeg::init_decode(const char* url, const AVInputFormat* fmt, AVDictionary** options)
+RESULT PlayTool::init_decode(AVMediaType type)
 {
-	avfctx_input = avformat_alloc_context();
 
-	if (avformat_open_input(&avfctx_input, url, fmt, options)) return OPEN_ERROR;
-	if (avformat_find_stream_info(avfctx_input, nullptr) < 0) return ARGS_ERROR;
-	av_dump_format(avfctx_input, 0, url, false);
+    int index = av_find_best_stream(avfctx_input, type, -1, -1, NULL, 0);
+    if (index != AVERROR_STREAM_NOT_FOUND) { AVStreamIndexToType[index] = type; AVTypeToStreamIndex[type] = index; }
+    decode_ctx[type] = avcodec_alloc_context3(nullptr);
+    if (decode_ctx[type] == nullptr)return ALLOC_ERROR;
 
-	int index = av_find_best_stream(avfctx_input, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
-	if (index != AVERROR_STREAM_NOT_FOUND) { AVStreamIndexToType[index] = AVMEDIA_TYPE_VIDEO; AVTypeToStreamIndex[AVMEDIA_TYPE_VIDEO] = index; }
-	index = av_find_best_stream(avfctx_input, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
-	if (index != AVERROR_STREAM_NOT_FOUND) { AVStreamIndexToType[index] = AVMEDIA_TYPE_AUDIO; AVTypeToStreamIndex[AVMEDIA_TYPE_AUDIO] = index; }
+    if (avcodec_parameters_to_context(decode_ctx[type], avfctx_input->streams[index]->codecpar) < 0)return ARGS_ERROR;
+    const AVCodec* codec = avcodec_find_decoder(decode_ctx[type]->codec_id);
+    if (avcodec_open2(decode_ctx[type], codec, NULL))return OPEN_ERROR;
 
-	decode_ctx[AVMEDIA_TYPE_VIDEO] = avcodec_alloc_context3(nullptr);
-	decode_ctx[AVMEDIA_TYPE_AUDIO] = avcodec_alloc_context3(nullptr);
-
-	if (!decode_ctx[AVMEDIA_TYPE_VIDEO] || !decode_ctx[AVMEDIA_TYPE_AUDIO]) return ALLOC_ERROR;
-
-	for (int i = 0; i != 6; i++)
-	{
-		if (AVStreamIndexToType[i] == AVMEDIA_TYPE_UNKNOWN)continue;
-		if (avcodec_parameters_to_context(decode_ctx[AVStreamIndexToType[i]], avfctx_input->streams[i]->codecpar) < 0)return ARGS_ERROR;
-		const AVCodec* codec = avcodec_find_decoder(decode_ctx[AVStreamIndexToType[i]]->codec_id);
-		if (avcodec_open2(decode_ctx[AVStreamIndexToType[i]], codec, NULL))return OPEN_ERROR;
-	}
-
-	secBaseVideo = av_q2d(avfctx_input->streams[AVTypeToStreamIndex[AVMEDIA_TYPE_VIDEO]]->time_base);
-	secBaseAudio = av_q2d(avfctx_input->streams[AVTypeToStreamIndex[AVMEDIA_TYPE_AUDIO]]->time_base);
+    secBaseTime[type] = av_q2d(avfctx_input->streams[AVTypeToStreamIndex[type]]->time_base);
 
 	return SUCCESS;
 }
 
-BaseFFmpeg::RESULT BaseFFmpeg::init_encode(const char* url, const AVOutputFormat* fmt)
+RESULT PlayTool::init_encode(AVMediaType type)
 {
     //if(avformat_alloc_output_context2(&avfctx_output, fmt, url, nullptr)<0);
 
@@ -72,7 +85,7 @@ BaseFFmpeg::RESULT BaseFFmpeg::init_encode(const char* url, const AVOutputFormat
 	return RESULT();
 }
 
-BaseFFmpeg::RESULT BaseFFmpeg::init_swr()
+RESULT PlayTool::init_swr()
 {
 	AutoAVCodecContextPtr& audio_ctx = decode_ctx[AVMEDIA_TYPE_AUDIO];
 
@@ -94,7 +107,7 @@ BaseFFmpeg::RESULT BaseFFmpeg::init_swr()
 	return SUCCESS;
 }
 
-BaseFFmpeg::RESULT BaseFFmpeg::sample_planner_to_packed(AVFrame* frame, uint8_t** data, int* linesize)
+RESULT PlayTool::sample_planner_to_packed(AVFrame* frame, uint8_t** data, int* linesize)
 {
 	*linesize = swr_convert(swr_ctx, data, *linesize, frame->data, frame->nb_samples);
 	if (*linesize < 0)return ARGS_ERROR;
@@ -102,7 +115,7 @@ BaseFFmpeg::RESULT BaseFFmpeg::sample_planner_to_packed(AVFrame* frame, uint8_t*
 	return SUCCESS;
 }
 
-BaseFFmpeg::RESULT BaseFFmpeg::init_sws(AVFrame* work, const AVPixelFormat dstFormat, const int dstW, const int dstH)
+RESULT PlayTool::init_sws(AVFrame* work, const AVPixelFormat dstFormat, const int dstW, const int dstH)
 {
 
 	if (dstW == 0 || dstH == 0)
@@ -113,7 +126,7 @@ BaseFFmpeg::RESULT BaseFFmpeg::init_sws(AVFrame* work, const AVPixelFormat dstFo
 	return SUCCESS;
 }
 
-BaseFFmpeg::RESULT BaseFFmpeg::sws_scale_420P(AVFrame*& data)
+RESULT PlayTool::sws_scale_420P(AVFrame*& data)
 {
 	AutoAVFramePtr& frame = avframe_work[AVMEDIA_TYPE_VIDEO].first;
 
@@ -126,7 +139,7 @@ BaseFFmpeg::RESULT BaseFFmpeg::sws_scale_420P(AVFrame*& data)
 	return SUCCESS;
 }
 
-inline void BaseFFmpeg::insert_queue(AVMediaType index, AutoAVFramePtr&& avf) noexcept
+inline void PlayTool::insert_queue(AVMediaType index, AutoAVFramePtr&& avf) noexcept
 {
 	framedata_type* temp = nullptr;
     while (!(temp = FrameQueue[index]->rear()) && (local_thread & decode_thread))
@@ -141,7 +154,7 @@ inline void BaseFFmpeg::insert_queue(AVMediaType index, AutoAVFramePtr&& avf) no
 	avf = av_frame_alloc();
 }
 
-bool BaseFFmpeg::flush_frame(AVMediaType index) noexcept
+bool PlayTool::flush_frame(AVMediaType index) noexcept
 {
 
 	framedata_type* temp = nullptr;
@@ -149,15 +162,13 @@ bool BaseFFmpeg::flush_frame(AVMediaType index) noexcept
 
 	avframe_work[index].first.reset(temp->first.release());
 	avframe_work[index].second = temp->second.get();
-	if (avframe_work[index].first == nullptr)return false;
 	return true;
 }
 
-void BaseFFmpeg::seek_time(int64_t sec) noexcept
+void PlayTool::seek_time(int64_t sec) noexcept
 {
     stop(read_thread);
     stop(decode_thread);
-
 
     PacketQueue.clear();
     FrameQueue[AVMEDIA_TYPE_AUDIO]->clear();
@@ -168,20 +179,22 @@ void BaseFFmpeg::seek_time(int64_t sec) noexcept
 
     if (avformat_seek_file(avfctx_input, -1,  INT64_MIN, sec * AV_TIME_BASE, sec * AV_TIME_BASE, AVSEEK_FLAG_BACKWARD) < 0)
     {
-        run(read_thread);
-        run(decode_thread);
+        if(!ThrRead.joinable()) start_read_thread();
+        else run(read_thread);
+        if(!ThrDecode.joinable()) start_decode_thread();
+        else run(decode_thread);
         return;
     }
-
     if(!ThrRead.joinable()) start_read_thread();
     else run(read_thread);
+
     if(!ThrDecode.joinable()) start_decode_thread();
     else run(decode_thread);
 
     while(!flush_frame(AVMEDIA_TYPE_AUDIO)) std::this_thread::sleep_for(1ms);
 }
 
-void BaseFFmpeg::stop(char type) noexcept
+void PlayTool::stop(char type) noexcept
 {
     if(ThrRead.joinable() && (type & read_thread) && (local_thread & read_thread))
     {
@@ -193,9 +206,13 @@ void BaseFFmpeg::stop(char type) noexcept
         local_thread &= ~decode_thread;
         wait_decode_pause.acquire();
     }
-
+    if (ThrPlay.joinable() && (type & playing_thread) && (local_thread & playing_thread))
+    {
+        local_thread &= ~playing_thread;
+        wait_play_pause.acquire();
+    }
 }
-void BaseFFmpeg::run(char type) noexcept
+void PlayTool::run(char type) noexcept
 {
     if(ThrRead.joinable() && (type & read_thread) && !(local_thread & read_thread))
     {
@@ -207,31 +224,38 @@ void BaseFFmpeg::run(char type) noexcept
         local_thread |= decode_thread;
         run_decode_thread.release();
     }
+    if (ThrPlay.joinable() && (type & playing_thread) && !(local_thread & playing_thread))
+    {
+        local_thread |= playing_thread;
+        run_play_thread.release();
+    }
 }
 
-void BaseFFmpeg::clear(char type) noexcept
+void PlayTool::clear(char type) noexcept
 {
     local_thread |= delete_thread;
 
-    if(type & read_thread)
+    if(ThrRead.joinable() && type & read_thread)
     {
         local_thread &= ~read_thread;
         if(ThrRead.joinable())ThrRead.join();
     }
-    if(type & decode_thread)
+    if(ThrDecode.joinable() && type & decode_thread)
     {
         local_thread &= ~decode_thread;
         if(ThrDecode.joinable())ThrDecode.join();
     }
+    if (ThrPlay.joinable() && type & playing_thread)
+    {
+        local_thread &= ~playing_thread;
+        if (ThrPlay.joinable())ThrPlay.join();
+    }
     local_thread &= ~delete_thread;
 }
 
-void BaseFFmpeg::clear() noexcept
+void PlayTool::clear() noexcept
 {
-    clear(read_thread | decode_thread);
-
-    if(ThrRead.joinable())ThrRead.join();
-    if(ThrDecode.joinable())ThrDecode.join();
+    clear(read_thread | decode_thread | playing_thread);
 
     decode_ctx[AVMEDIA_TYPE_AUDIO].reset(nullptr);
     decode_ctx[AVMEDIA_TYPE_VIDEO].reset(nullptr);
@@ -252,9 +276,9 @@ void BaseFFmpeg::clear() noexcept
     local_thread &= ~delete_thread;
 }
 
-BaseFFmpeg::RESULT BaseFFmpeg::start_read_thread() noexcept
+RESULT PlayTool::start_read_thread() noexcept
 {
-    local_thread |=read_thread;
+    local_thread |= read_thread;
     ThrRead = std::jthread([&]()->void
 		{
             std::cout << "create read thread id: " << std::this_thread::get_id() << std::endl;
@@ -290,13 +314,12 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_read_thread() noexcept
     return SUCCESS;
 }
 
-BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
+RESULT PlayTool::start_decode_thread() noexcept
 {
-    local_thread |=decode_thread;
+    local_thread |= decode_thread;
     ThrDecode = std::jthread([&]()->void
 		{
             std::cout << "create decode thread id: " << std::this_thread::get_id() << std::endl;
-
 
 			int err = AVERROR(EAGAIN);
 			AutoAVFramePtr avf = av_frame_alloc();
@@ -313,7 +336,7 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
                     if(local_thread & decode_thread) std::this_thread::sleep_for(1ms);
                     else continue;
 
-                if((*avp).get()==nullptr){local_thread &= ~playing_thread; goto DECODE_END;}
+                if((*avp).get()==nullptr) goto DECODE_END;
 
 				AVMediaType index = AVStreamIndexToType[(*avp)->stream_index];
 				if (index == AVMEDIA_TYPE_VIDEO || index == AVMEDIA_TYPE_AUDIO)
@@ -327,11 +350,7 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
                         err = avcodec_receive_frame(decode_ctx[index], avf);
                         if (err == 0) insert_queue(index, std::move(avf));
 						else if (err == AVERROR(EAGAIN)) break;
-                        else if (err == AVERROR_EOF)
-                        {
-                            insert_queue(index, nullptr);
-                            goto DECODE_END;
-                        }
+                        else if (err == AVERROR_EOF) goto DECODE_END;
                         else goto DECODE_END;
 					}
 				}
@@ -340,19 +359,20 @@ BaseFFmpeg::RESULT BaseFFmpeg::start_decode_thread() noexcept
 
             DECODE_END:
             local_thread &= ~decode_thread;
+            insert_queue(AVMEDIA_TYPE_VIDEO, nullptr);
             ThrDecode.detach();
             std::cout << "exit decode thread id: " << std::this_thread::get_id() << std::endl;
         });
 		return SUCCESS;
 }
 
-BaseFFmpeg::RESULT BaseFFmpeg::start_encode_thread() noexcept
+RESULT PlayTool::start_encode_thread() noexcept
 {
 
 	return RESULT();
 }
 
-BaseFFmpeg::RESULT BaseFFmpeg::start_pull_steam_thread() noexcept
+RESULT PlayTool::start_pull_steam_thread() noexcept
 {
 
 	return RESULT();
