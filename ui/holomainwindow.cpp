@@ -7,7 +7,6 @@
 #include "qfiledialog.h"
 
 using namespace BaseSDL;
-
 constexpr const char str_StyleSheet_stop[]="            \
     QPushButton:!hover{                                 \
         border:none;                                    \
