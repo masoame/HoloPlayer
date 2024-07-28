@@ -246,6 +246,8 @@ namespace BaseSDL
 		{
 			if (!target->flush_frame(AVMEDIA_TYPE_AUDIO)) return;
 
+            if(!(target->local_thread & playing_thread)) return;
+
             if (is_planner)audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second);
             else audio_buf = audio_frame.first->data[0];
             audio_pos = audio_buf;
