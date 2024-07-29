@@ -18,7 +18,7 @@ void NetToFileDialog::on_checkUrlBtn_clicked()
 {
     if (ui->urlEdit->text().isEmpty() || ui->urlEdit->text() == "")return;
 
-    QMessageBox::information(this, "测试", "测试");
+    QMessageBox::information(this, "111测试", "测试");
     CURLcode code;
     auto str = ui->urlEdit->text().toStdString();
     code = this->_userdata.RequestInit(str.c_str());
@@ -43,11 +43,6 @@ void NetToFileDialog::on_checkUrlBtn_clicked()
         return;
     }
     QMessageBox::information(this, "success", "");
-    for (auto& str : results.value())
-    {
-        qDebug() << str << "\n";
-    }
-
 
     return;
 }

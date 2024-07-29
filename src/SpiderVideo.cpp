@@ -85,6 +85,10 @@ namespace SpiderVideo
             else return CURLE_FAILED_INIT;
         }
 
+        curl_easy_setopt(this->_curl, CURLOPT_CONNECTTIMEOUT, 10L);
+        curl_easy_setopt(this->_curl, CURLOPT_TIMEOUT, 100L);
+
+
         this->header = nullptr;
         curl_slist*& list = this->header;
         for (auto& str : headerOption_list) if(str != nullptr) list = curl_slist_append(list, str);

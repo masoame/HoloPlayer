@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.8)
 
-##--------------------------------------------------------------------------------------------------------------------------------
+##-----------------------------------------------------------------------------------------------------------------------------
+##--------------------------使用VS打开----CMAKE_PREFIX_PATH请更换成自己本地Qt msvc所在路径-------------------------------------
+##---------------------------------------如果使用Qt打开CMake请注释掉这一段-----------------------------------------------------
+##-----------------------------------------------------------------------------------------------------------------------------
 if (POLICY CMP0141)
   cmake_policy(SET CMP0141 NEW)
   set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
@@ -13,13 +16,16 @@ set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEB
 
 project(holoPlayer VERSION 0.1 LANGUAGES CXX)
 
+add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
+
 set(CMAKE_PREFIX_PATH "D:/Qt/6.7.0/msvc2019_64")
 file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/out/build)
 file(COPY ${CMAKE_PREFIX_PATH}/plugins DESTINATION ${PROJECT_SOURCE_DIR}/out/build)
 file(GLOB DLL_FILE ${CMAKE_PREFIX_PATH}/bin/*.dll)
 file(COPY ${DLL_FILE} DESTINATION ${PROJECT_SOURCE_DIR}/out/build)
 
-##-------------------------------------------------------------------------------------------------------------------------------
+##----------------------------------------------------------------------------------------------------------------------------
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -27,10 +33,9 @@ set(CMAKE_AUTORCC ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-#set(CMAKE_CXX_FLAGS "-O3")
 
 set(LIB_DIR ${PROJECT_SOURCE_DIR}/lib)
-#set(DLL_DIR ${PROJECT_SOURCE_DIR}/bin)
+
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/inc)

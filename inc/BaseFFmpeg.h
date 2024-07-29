@@ -18,6 +18,8 @@ extern"C"
 
 namespace BaseFFmpeg
 {
+	using namespace std::chrono_literals;
+
 	//管理内存的智能指针
 	using AutoAVPacketPtr = AutoPtr<AVPacket, Functor<av_packet_free>, true>;
 	using AutoAVCodecContextPtr = AutoPtr<AVCodecContext, Functor<avcodec_free_context>, true>;

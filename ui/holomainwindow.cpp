@@ -37,8 +37,6 @@ constexpr const char str_StyleSheet_run[]="             \
 }                                                       \
 ";
 
-
-
 HoloMainWindow::HoloMainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::HoloMainWindow)
