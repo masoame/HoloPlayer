@@ -75,7 +75,7 @@ namespace SpiderVideo
         return curl_easy_setopt(this->_curl, CURLOPT_WRITEDATA, this);
     }
 
-    CURLcode SpiderTool::SetOption(char type, std::string savepath, std::initializer_list<const char*> headerOption_list)
+    CURLcode SpiderTool::SetOption(char type, std::string savepath, std::initializer_list<const char*> headerOption_list,int connecttimeout )
     {
         this->_type = type;
         if (this->_type & saveFile)
@@ -85,9 +85,8 @@ namespace SpiderVideo
             else return CURLE_FAILED_INIT;
         }
 
-        curl_easy_setopt(this->_curl, CURLOPT_CONNECTTIMEOUT, 10L);
-        curl_easy_setopt(this->_curl, CURLOPT_TIMEOUT, 100L);
-
+        CURLcode code = curl_easy_setopt(this->_curl, CURLOPT_CONNECTTIMEOUT, connecttimeout);
+        if (code != CURLE_OK) return code;
 
         this->header = nullptr;
         curl_slist*& list = this->header;
@@ -109,6 +108,7 @@ namespace SpiderVideo
     {
         CURLcode code = curl_easy_setopt(this->_curl, CURLOPT_HEADER, 1);
         if (code != CURLE_OK) return code;
+
         code = curl_easy_setopt(this->_curl, CURLOPT_NOBODY, 1);
         if (code != CURLE_OK) return code;
 

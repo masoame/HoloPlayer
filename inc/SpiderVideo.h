@@ -37,7 +37,7 @@ namespace SpiderVideo
 		size_t size = 0;
 
 		CURLcode RequestInit(const char* request_url);
-        CURLcode SetOption(char type, std::string savepath = "", std::initializer_list<const char*> headerOption_list = {});
+		CURLcode SetOption(char type, std::string savepath = "", std::initializer_list<const char*> headerOption_list = {}, int connecttimeout = 5);
 		CURLcode RequestSoure();
 		CURLcode RequestOnlyHeader();
 

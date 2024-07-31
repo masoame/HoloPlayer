@@ -277,7 +277,7 @@ namespace BaseFFmpeg
                         __this->local_thread &= ~read_thread;
                         __this->PacketQueue.try_push(nullptr);
                         std::cout << "exit read thread id: " << std::this_thread::get_id() << std::endl;
-                    }) > ptr(this);
+                    }) > end(this);
 
                 AutoAVPacketPtr avp;
                 int err = AVERROR(EAGAIN);
@@ -312,13 +312,13 @@ namespace BaseFFmpeg
         ThrDecode = std::jthread([&]()->void
             {
                 std::cout << "create decode thread id: " << std::this_thread::get_id() << std::endl;
-                std::unique_ptr < PlayTool, decltype([](void* _this) ->void
+                std::unique_ptr <PlayTool, decltype([](void* _this) ->void
                     {
                         auto __this = static_cast<PlayTool*>(_this);
                         __this->local_thread &= ~decode_thread;
                         __this->insert_queue(AVMEDIA_TYPE_VIDEO, nullptr);
                         std::cout << "exit decode thread id: " << std::this_thread::get_id() << std::endl;
-                    }) > ptr(this);
+                    }) > end(this);
 
                 int err = AVERROR(EAGAIN);
                 AutoAVFramePtr avf = av_frame_alloc();
