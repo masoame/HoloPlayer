@@ -41,8 +41,6 @@ void NetToFileDialog::on_checkUrlBtn_clicked()
     auto results = ParseJson::ParseBilibili(_userdata.buffer.data());
     if (code != CURLE_OK) return;
 
-    //QAbstractItemModel a;
-
     //ui->downloadUrlListView->setModel();
 
 }

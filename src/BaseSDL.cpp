@@ -112,7 +112,6 @@ namespace BaseSDL
                         target->wait_play_pause.release();
 						target->run_play_thread.acquire();
                     }
-
 					int ret = 0;
 					switch (last_format) {
 					case SDL_PIXELFORMAT_IYUV:

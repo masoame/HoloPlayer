@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
 
+project(holoPlayer VERSION 0.1 LANGUAGES CXX)
+
 ##-----------------------------------------------------------------------------------------------------------------------------
 ##--------------------------使用VS打开----CMAKE_PREFIX_PATH请更换成自己本地Qt msvc所在路径-------------------------------------
 ##---------------------------------------如果使用Qt打开CMake请注释掉这一段-----------------------------------------------------
@@ -14,8 +16,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi /O2")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
 set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
 
-project(holoPlayer VERSION 0.1 LANGUAGES CXX)
-
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
 
@@ -26,6 +26,10 @@ file(GLOB DLL_FILE ${CMAKE_PREFIX_PATH}/bin/*.dll)
 file(COPY ${DLL_FILE} DESTINATION ${PROJECT_SOURCE_DIR}/out/build)
 
 ##----------------------------------------------------------------------------------------------------------------------------
+
+set(QT_MOC_EXECUTABLE ${CMAKE_PREFIX_PATH}/bin/moc.exe) 
+set(QT_RCC_EXECUTABLE ${CMAKE_PREFIX_PATH}/bin/RCC.exe) 
+set(QT_UIC_EXECUTABLE ${CMAKE_PREFIX_PATH}/bin/Uic.exe)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -45,6 +49,8 @@ file(GLOB LIB_FILE ${LIB_DIR}/*.lib ${LIB_DIR}/*.a)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS OpenGLWidgets)
+
+
 
 set(PROJECT_SOURCES
 )

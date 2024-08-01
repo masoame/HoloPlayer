@@ -79,7 +79,7 @@ void HoloMainWindow::timerEvent(QTimerEvent * event)
     if(!ui->time_slider->isSliderDown())
     {
         int sec=audio_ptr->pts * BaseSDL::target->secBaseTime[AVMEDIA_TYPE_AUDIO];
-        ui->timestamp->setText(QString::asprintf("%02d:%02d", sec/60,sec%60));
+        ui->timestamp->setText(QString::asprintf("%02d:%02d", sec / 60, sec % 60));
         ui->time_slider->setValue(sec);
     }
     if(target->local_thread & playing_thread)
