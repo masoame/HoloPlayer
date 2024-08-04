@@ -32,7 +32,8 @@ private slots:
 
 private:
     Ui::HoloMainWindow *ui;
-    BaseFFmpeg::PlayTool ffmpeg_dirver;
+    FFmpegLayer::PlayTool ffmpeg_dirver;
+    SDLLayer::DriveFullWindow drivefullwindows;
     int timer_id;
 protected:
     void timerEvent(QTimerEvent * event) override;

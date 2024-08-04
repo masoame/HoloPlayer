@@ -1,8 +1,8 @@
 #include "BaseSDL.h"
 #include<iostream>
-namespace BaseSDL
+namespace SDLLayer
 {
-	const SDL_AudioFormat map_audio_formot[13]
+	const constexpr SDL_AudioFormat map_audio_formot[13]
 	{
 		AUDIO_U8,
 		AUDIO_S16SYS,
@@ -43,43 +43,37 @@ namespace BaseSDL
 		{ AV_PIX_FMT_NONE,           SDL_PIXELFORMAT_UNKNOWN }
 	};
 
-	BaseFFmpeg::PlayTool* target = nullptr;
-
-    inline namespace Global_AudioRunning
+	DriveFullWindow::DriveFullWindow(FFmpegLayer::PlayTool& rely)
 	{
-		Uint8* audio_buf = nullptr;
-		Uint8* audio_pos = nullptr;
-		int audio_buflen = 0;
-        bool is_planner = false;
-        char volume = static_cast<char>(SDL_MIX_MAXVOLUME);
-	};
+		target = &rely;
+	}
 
-    inline namespace Global_VideoRunning
+	DriveFullWindow::~DriveFullWindow()
 	{
-		AutoWindowPtr SDL_win;
-		AutoRendererPtr SDL_renderer;
-		AutoTexturePtr SDL_texture;
-		SDL_Rect rect{0};
-		SDL_PixelFormatEnum last_format = SDL_PIXELFORMAT_IYUV;
-        std::binary_semaphore wait_show_pause{0};
-        std::binary_semaphore run_show_thread{0};
-	};
+		SDL_CloseAudioDevice(device_id);
+		if (target != nullptr) target->clear();
+		SDL_texture.reset(nullptr);
+		SDL_renderer.reset(nullptr);
+		SDL_win.reset(nullptr);
+		target = nullptr;
+	}
 
-    void InitPlayer(const char* WindowName, SDL_AudioCallback callback)
+    void DriveFullWindow::InitPlayer(const char* WindowName, SDL_AudioCallback callback)
 	{
 		if (target == nullptr)return;
 		InitAudio(callback);
 		InitVideo(WindowName);
-		target->insert_callback[AVMEDIA_TYPE_VIDEO] = convert_video_frame;
-		target->insert_callback[AVMEDIA_TYPE_AUDIO] = convert_audio_frame;
+		target->insert_callback[AVMEDIA_TYPE_VIDEO] = std::bind(&DriveFullWindow::convert_video_frame, this, std::placeholders::_1, std::placeholders::_2);
+		target->insert_callback[AVMEDIA_TYPE_AUDIO] = std::bind(&DriveFullWindow::convert_audio_frame, this, std::placeholders::_1, std::placeholders::_2);
 		target->start_read_thread();
 		target->start_decode_thread();
 	}
 
-    void StartPlayer() noexcept
+    void DriveFullWindow::StartPlayer() noexcept
 	{
+		if (target == nullptr) return;
 		target->clear(playing_thread);
-		SDL_PauseAudio(0);
+		SDL_PauseAudioDevice(device_id, 0);
         target->local_thread |= playing_thread;
         target->ThrPlay = std::jthread([&]()->void
 			{
@@ -87,7 +81,7 @@ namespace BaseSDL
 				std::unique_ptr < PlayTool, decltype([](void* _this)
 					{
 						auto __this = static_cast<PlayTool*>(_this);
-						__this->local_thread &= ~BaseFFmpeg::playing_thread;
+						__this->local_thread &= ~FFmpegLayer::playing_thread;
 						std::cout << "exit player thread id: " << std::this_thread::get_id() << std::endl;
 					}) > end(target);
 
@@ -101,14 +95,14 @@ namespace BaseSDL
                 while (true)
 				{
                     while (!target->flush_frame(AVMEDIA_TYPE_VIDEO))
-                        if (target->local_thread & BaseFFmpeg::playing_thread) std::this_thread::sleep_for(1ms);
+                        if (target->local_thread & FFmpegLayer::playing_thread) std::this_thread::sleep_for(1ms);
                         else break;
 
 					if (frame == nullptr) return;
 
-                    if(!(target->local_thread & BaseFFmpeg::playing_thread))
+                    if(!(target->local_thread & FFmpegLayer::playing_thread))
                     {
-						if (target->local_thread & BaseFFmpeg::delete_thread) return;
+						if (target->local_thread & FFmpegLayer::delete_thread) return;
                         target->wait_play_pause.release();
 						target->run_play_thread.acquire();
                     }
@@ -143,7 +137,7 @@ namespace BaseSDL
                     {
                         if(target->FrameQueue[AVMEDIA_TYPE_VIDEO]->full() && target->FrameQueue[AVMEDIA_TYPE_AUDIO]->empty())
                             target->flush_frame(AVMEDIA_TYPE_VIDEO);
-                        if(target->local_thread & BaseFFmpeg::playing_thread) std::this_thread::sleep_for(1ms);
+                        if(target->local_thread & FFmpegLayer::playing_thread) std::this_thread::sleep_for(1ms);
                         else break;
                     }
                     SDL_RenderPresent(SDL_renderer);
@@ -151,12 +145,7 @@ namespace BaseSDL
             });
 	}
 
-	void bindPlayTool(BaseFFmpeg::PlayTool& rely) noexcept
-	{
-		target = &rely;
-	}
-
-	void convert_video_frame(AVFrame*& work, char*& buf) noexcept
+	void DriveFullWindow::convert_video_frame(AVFrame*& work, char*& buf) noexcept
 	{
 		if (work == nullptr) return;
 
@@ -171,7 +160,7 @@ namespace BaseSDL
 		last_format = map_video_format.find(static_cast<AVPixelFormat>(work->format))->second;
 	}
 
-    void convert_audio_frame(AVFrame*& work, char*& buf) noexcept
+    void DriveFullWindow::convert_audio_frame(AVFrame*& work, char*& buf) noexcept
 	{
 		if (work == nullptr)return;
 		if (buf == nullptr)buf = new char[work->linesize[0]];
@@ -179,7 +168,7 @@ namespace BaseSDL
 			target->sample_planner_to_packed(work, reinterpret_cast<uint8_t**>(&buf), &work->linesize[0]);
 	}
 
-	void KeyMouseCallEvent() noexcept
+	void DriveFullWindow::KeyMouseCallEvent() noexcept
 	{
 		SDL_Event windowEvent;
 
@@ -203,12 +192,12 @@ namespace BaseSDL
 						if (target == nullptr) break;
 						if (target->local_thread & playing_thread)
 						{
-							SDL_PauseAudio(1);
+							SDL_PauseAudioDevice(device_id, 1);
 							target->stop(playing_thread);
 						}
 						else
 						{
-							SDL_PauseAudio(0);
+							SDL_PauseAudioDevice(device_id, 0);
 							target->run(playing_thread);
 						}
                         break;
@@ -237,35 +226,37 @@ namespace BaseSDL
 		}
 	}
 
-    void SDLCALL default_callback(void* userdata, Uint8* stream, int len)noexcept
+    void SDLCALL DriveFullWindow::default_callback(void* userdata, Uint8* stream, int len)
 	{
-		auto& audio_frame = target->avframe_work[AVMEDIA_TYPE_AUDIO];
+		auto _this = static_cast<DriveFullWindow*>(userdata);
+		auto& audio_frame = _this->target->avframe_work[AVMEDIA_TYPE_AUDIO];
+
 		//清空流
-		if (audio_buflen == 0)
+		if (_this->audio_buflen == 0)
 		{
-			if (!target->flush_frame(AVMEDIA_TYPE_AUDIO)) return;
+			if (!_this->target->flush_frame(AVMEDIA_TYPE_AUDIO)) return;
 
-            if(!(target->local_thread & playing_thread)) return;
+            if(!(_this->target->local_thread & playing_thread)) return;
 
-            if (is_planner)audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second);
-            else audio_buf = audio_frame.first->data[0];
-            audio_pos = audio_buf;
-            audio_buflen = audio_frame.first->linesize[0];
+			if (_this->is_planner)_this->audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second);
+            else _this->audio_buf = audio_frame.first->data[0];
+			_this->audio_pos = _this->audio_buf;
+			_this->audio_buflen = audio_frame.first->linesize[0];
 
 		}
 
-		len = audio_buflen > len ? len : audio_buflen;
+		len = _this->audio_buflen > len ? len : _this->audio_buflen;
 		SDL_memset(stream, 0, len);
-        SDL_MixAudio(stream, audio_pos, len, volume);
-		audio_pos += len;
-		audio_buflen -= len;
+		SDL_MixAudioFormat(stream, _this->audio_pos, _this->sdl_audio.format, len, _this->volume);
+		_this->audio_pos += len;
+		_this->audio_buflen -= len;
 
 		return;
 	}
 
-    void InitAudio(SDL_AudioCallback callback)
+    void DriveFullWindow::InitAudio(SDL_AudioCallback callback)
 	{
-        SDL_CloseAudio();
+		SDL_CloseAudioDevice(device_id);
 		auto& audio_ctx = target->decode_ctx[AVMEDIA_TYPE_AUDIO];
 		AVSampleFormat format = *audio_ctx->codec->sample_fmts;
 
@@ -273,24 +264,29 @@ namespace BaseSDL
 
 		if (av_sample_fmt_is_planar(format))
 		{
-			if (target->init_swr() != BaseFFmpeg::SUCCESS) throw "init_swr() failed";
+			if (target->init_swr() != FFmpegLayer::SUCCESS) throw "init_swr() failed";
 			is_planner = true;
 		}
         else is_planner = false;
 		if (map_audio_formot[format] == -1) throw "audio format is not suport!!!\n";
 
-		SDL_AudioSpec sdl_audio{ 0 };
+		memset(&sdl_audio, 0, sizeof(sdl_audio));
+
 		sdl_audio.format = map_audio_formot[format];
 		sdl_audio.channels = audio_ctx->ch_layout.nb_channels;
 		sdl_audio.samples = audio_ctx->frame_size / audio_ctx->ch_layout.nb_channels;
 		sdl_audio.silence = 0;
 		sdl_audio.freq = audio_ctx->sample_rate;
+		sdl_audio.userdata = this;
 		sdl_audio.callback = callback;
 
-		if (SDL_OpenAudio(&sdl_audio, nullptr)) throw "SDL_OpenAudio failed!!!\n";
+		device_id = SDL_OpenAudioDevice(nullptr, 0, &sdl_audio, nullptr, SDL_AUDIO_ALLOW_FORMAT_CHANGE);
+
+		if (device_id == 0) throw SDL_GetError();
+
 	}
 
-    void InitVideo(const char* title)
+    void DriveFullWindow::InitVideo(const char* title)
 	{
         SDL_texture.reset(nullptr);
         SDL_renderer.reset(nullptr);
@@ -309,20 +305,8 @@ namespace BaseSDL
 		SDL_texture = SDL_CreateTexture(SDL_renderer, last_format, SDL_TEXTUREACCESS_STREAMING, video_ctx->width, video_ctx->height);
 		if (SDL_texture == nullptr) throw "texture create failed";
 
-
 		rect.w = target->decode_ctx[AVMEDIA_TYPE_VIDEO]->width;
 		rect.h = target->decode_ctx[AVMEDIA_TYPE_VIDEO]->height;
 	}
-
-    void Destroy() noexcept
-    {
-        target->clear();
-        SDL_CloseAudio();
-        SDL_texture.reset(nullptr);
-        SDL_renderer.reset(nullptr);
-        SDL_win.reset(nullptr);
-        target = nullptr;
-    }
-
 }
 

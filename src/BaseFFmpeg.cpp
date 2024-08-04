@@ -1,12 +1,12 @@
 #include"BaseFFmpeg.h"
 #include<iostream>
 
-namespace BaseFFmpeg
+namespace FFmpegLayer
 {
     //sample_bit_size[AVSampleFormat(音频采样格式)] == 采样点的大小
-    constexpr const char BaseFFmpeg::sample_bit_size[13]{ 1,2,4,4,8,1,2,4,4,8,8,8,-1 };
+    constexpr const char sample_bit_size[13]{ 1,2,4,4,8,1,2,4,4,8,8,8,-1 };
     //planner转化为对应的packed(AV_SAMPLE_FMT_NONE为错误格式)
-    constexpr const AVSampleFormat BaseFFmpeg::map_palnner_to_packad[13]
+    constexpr const AVSampleFormat map_palnner_to_packad[13]
     {
         AV_SAMPLE_FMT_NONE,
         AV_SAMPLE_FMT_NONE,

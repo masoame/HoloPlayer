@@ -11,12 +11,12 @@ extern"C"
 }
 #include"common.hpp"
 #include"Cirucular_Queue.hpp"
-
+#include<functional>
 #include<semaphore>
 #include<thread>
+#include<iostream>
 
-
-namespace BaseFFmpeg
+namespace FFmpegLayer
 {
 	using namespace std::chrono_literals;
 
@@ -128,7 +128,7 @@ namespace BaseFFmpeg
 		Circular_Queue<AutoAVPacketPtr, 8> PacketQueue;
 
 		//本地线程状态
-		uint8_t local_thread;
+		uint8_t local_thread = 0;
 		//输入输出格式指针
 		AutoAVFormatContextPtr avfctx_input, avfctx_output;
 		//解码上下文指针
@@ -145,7 +145,9 @@ namespace BaseFFmpeg
 		auto_framedata_type avframe_work[6];
 
 		//insert_callback[AVMediaType(帧格式)] == 处理函数指针
-		insert_callback_type insert_callback[6]{ 0 };
+
+		std::function<void(AVFrame*&, char*& buf)> insert_callback[6];
+
 
 		// AVStreamIndexToType[流的索引] == 流类型
 		AVMediaType AVStreamIndexToType[6]{ AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN,AVMEDIA_TYPE_UNKNOWN };
@@ -154,7 +156,7 @@ namespace BaseFFmpeg
 		int AVTypeToStreamIndex[6]{ -1,-1,-1,-1,-1,-1 };
 
 		//各个流的时间基
-		double secBaseTime[3];
+		double secBaseTime[3]{ 0 };
 
 		//读取Packet线程
 		std::jthread ThrRead;
