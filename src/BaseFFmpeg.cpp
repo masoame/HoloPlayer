@@ -118,10 +118,10 @@ namespace FFmpegLayer
 
     RESULT PlayTool::sws_scale_420P(AVFrame*& data)
     {
-        AutoAVFramePtr& frame = avframe_work[AVMEDIA_TYPE_VIDEO].first;
 
         AVFrame* dst = av_frame_alloc();
-        sws_scale_frame(sws_ctx, dst, data);
+
+        int ret = sws_scale_frame(sws_ctx, dst, data);
 
         dst->pts = data->pts;
         av_frame_unref(data);

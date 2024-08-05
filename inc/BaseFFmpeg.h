@@ -14,7 +14,6 @@ extern"C"
 #include<functional>
 #include<semaphore>
 #include<thread>
-#include<iostream>
 
 namespace FFmpegLayer
 {

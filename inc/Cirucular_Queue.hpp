@@ -35,8 +35,9 @@ class Circular_Queue :public Circular_Queue_API<_T>
 public:
 	explicit Circular_Queue() :_front(0), _rear(0) { _Arr.reset(new _Type[_mask + 1]); }
 	explicit Circular_Queue(Circular_Queue&& target) :_front(target._front), _rear(target._rear) { _Arr.reset(target._Arr.release()); }
-	
-    size_t size() noexcept override { return _rear - _front; }
+	explicit Circular_Queue(Circular_Queue& target) = delete;
+
+	size_t size() noexcept override { return _rear - _front; }
 
 	bool try_push(_Type&& target) noexcept 	override
 	{

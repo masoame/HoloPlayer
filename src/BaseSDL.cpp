@@ -107,7 +107,7 @@ namespace SDLLayer
 						target->run_play_thread.acquire();
                     }
 					int ret = 0;
-					switch (last_format) {
+					switch (pixel_format) {
 					case SDL_PIXELFORMAT_IYUV:
 						if (frame->linesize[0] > 0 && frame->linesize[1] > 0 && frame->linesize[2] > 0) {
 							ret = SDL_UpdateYUVTexture(SDL_texture, NULL, frame->data[0], frame->linesize[0],
@@ -131,6 +131,9 @@ namespace SDLLayer
 							ret = SDL_UpdateTexture(SDL_texture, NULL, frame->data[0], frame->linesize[0]);
 						break;
 					}
+
+					if (ret == -1)std::cout << SDL_GetError() << std::endl;
+
 					if (SDL_RenderCopy(SDL_renderer, SDL_texture, NULL, &rect)) return;
 
                     while ((frame->pts * secBaseVideo) >= (audio_ptr.first->pts * secBaseAudio))
@@ -149,15 +152,24 @@ namespace SDLLayer
 	{
 		if (work == nullptr) return;
 
-		auto tempformat = map_video_format.find(static_cast<AVPixelFormat>(work->format));
+		if (SDL_texture == nullptr)
+		{
+			auto format = map_video_format.find(static_cast<AVPixelFormat>(work->format));
+			if (format == map_video_format.end() || format->first == AV_PIX_FMT_NONE)
+			{
+				isNeedToChangeFrame = true;
+				target->init_sws(work);
+				pixel_format = SDL_PIXELFORMAT_IYUV;
+			}
+			else
+			{
+				pixel_format = format->second;
+				isNeedToChangeFrame = false;
+			}
+			SDL_texture = SDL_CreateTexture(SDL_renderer, pixel_format, SDL_TEXTUREACCESS_STREAMING, work->width, work->height);
+		}
+		if (isNeedToChangeFrame) target->sws_scale_420P(work);
 
-		if (target->sws_ctx == nullptr && work->format != AV_PIX_FMT_NONE && tempformat == map_video_format.end())
-			target->init_sws(work);
-		
-		if (tempformat == map_video_format.end())
-			target->sws_scale_420P(work);
-
-		last_format = map_video_format.find(static_cast<AVPixelFormat>(work->format))->second;
 	}
 
     void DriveFullWindow::convert_audio_frame(AVFrame*& work, char*& buf) noexcept
@@ -238,8 +250,10 @@ namespace SDLLayer
 
             if(!(_this->target->local_thread & playing_thread)) return;
 
-			if (_this->is_planner)_this->audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second);
-            else _this->audio_buf = audio_frame.first->data[0];
+			if (_this->is_planner)
+				_this->audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second);
+            else 
+				_this->audio_buf = audio_frame.first->data[0];
 			_this->audio_pos = _this->audio_buf;
 			_this->audio_buflen = audio_frame.first->linesize[0];
 
@@ -301,9 +315,6 @@ namespace SDLLayer
 
 		SDL_renderer = SDL_CreateRenderer(SDL_win, -1, SDL_RENDERER_PRESENTVSYNC);
 		if (SDL_renderer == nullptr)throw "Renderer create failed";
-
-		SDL_texture = SDL_CreateTexture(SDL_renderer, last_format, SDL_TEXTUREACCESS_STREAMING, video_ctx->width, video_ctx->height);
-		if (SDL_texture == nullptr) throw "texture create failed";
 
 		rect.w = target->decode_ctx[AVMEDIA_TYPE_VIDEO]->width;
 		rect.h = target->decode_ctx[AVMEDIA_TYPE_VIDEO]->height;

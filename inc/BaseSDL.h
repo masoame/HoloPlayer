@@ -23,7 +23,6 @@ namespace SDLLayer
 	//转化AVPixelFormat为SDL_PixelFormatEnum格式
 	extern const std::map<AVPixelFormat, SDL_PixelFormatEnum> map_video_format;
 
-	
 	class DriveFullWindow
 	{
 	public:
@@ -56,7 +55,9 @@ namespace SDLLayer
 		//窗口信息
 		SDL_Rect rect{ 0 };
 		//SDL材质选择
-		SDL_PixelFormatEnum last_format = SDL_PIXELFORMAT_IYUV;
+		SDL_PixelFormatEnum pixel_format;
+		//是否需要转化帧格式
+		bool isNeedToChangeFrame = false;
 		//----------------------------------------------------------------------------------------------------------------------------
 	public:
 		DriveFullWindow(FFmpegLayer::PlayTool& rely);
@@ -75,6 +76,8 @@ namespace SDLLayer
 		void InitAudio(SDL_AudioCallback callback);
 		//初始化视频环境
 		void InitVideo(const char* title);
+		//初始化帧转化器
+
 
 		//默认音頻回调函数
 		static void SDLCALL default_callback(void* userdata, Uint8* stream, int len);
