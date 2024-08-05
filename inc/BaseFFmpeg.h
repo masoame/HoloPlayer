@@ -8,6 +8,13 @@ extern"C"
 #include<libavutil/avutil.h>
 #include<libswresample/swresample.h>
 #include<libavutil/channel_layout.h>
+
+
+#include <libavutil/pixdesc.h>
+#include <libavutil/hwcontext.h>
+#include <libavutil/opt.h>
+#include <libavutil/avassert.h>
+#include <libavutil/imgutils.h>
 }
 #include"common.hpp"
 #include"Cirucular_Queue.hpp"
