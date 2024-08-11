@@ -131,14 +131,11 @@ namespace FFmpegLayer
 
     inline void PlayTool::insert_queue(AVMediaType index, AutoAVFramePtr&& avf) noexcept
     {
-        framedata_type* temp = nullptr;
-        while (!(temp = FrameQueue[index]->rear()) && (local_thread & decode_thread))
-            std::this_thread::sleep_for(1ms);
-        if (temp == nullptr) return;
-        char* userdata = temp->second.release();
+        char* userdata = nullptr;
         if (insert_callback[index] != nullptr)
             insert_callback[index](avf, userdata);
-        while (!FrameQueue[index]->try_push({ avf.release(),std::unique_ptr<char[]>(userdata) }) && (local_thread & decode_thread))
+
+        while (!FrameQueue[index].try_push(std::move(avf),userdata) && (local_thread & decode_thread))
             std::this_thread::sleep_for(1ms);
 
         avf = av_frame_alloc();
@@ -147,11 +144,11 @@ namespace FFmpegLayer
     bool PlayTool::flush_frame(AVMediaType index) noexcept
     {
 
-        framedata_type* temp = nullptr;
-        if (!(temp = FrameQueue[index]->try_pop())) return false;
+        std::unique_ptr<framedata_type> temp = nullptr;
+        if (!(temp = FrameQueue[index].try_pop())) return false;
 
         avframe_work[index].first.reset(temp->first.release());
-        avframe_work[index].second = temp->second.get();
+        avframe_work[index].second.reset(temp->second.release());
         return true;
     }
 
@@ -161,8 +158,8 @@ namespace FFmpegLayer
         stop(decode_thread);
 
         PacketQueue.clear();
-        FrameQueue[AVMEDIA_TYPE_AUDIO]->clear();
-        FrameQueue[AVMEDIA_TYPE_VIDEO]->clear();
+        FrameQueue[AVMEDIA_TYPE_AUDIO].clear();
+        FrameQueue[AVMEDIA_TYPE_VIDEO].clear();
 
         avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_VIDEO]);
         avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_AUDIO]);
@@ -251,8 +248,8 @@ namespace FFmpegLayer
         avfctx_input.reset(nullptr);
 
         PacketQueue.clear();
-        FrameQueue[AVMEDIA_TYPE_AUDIO]->clear();
-        FrameQueue[AVMEDIA_TYPE_VIDEO]->clear();
+        FrameQueue[AVMEDIA_TYPE_AUDIO].clear();
+        FrameQueue[AVMEDIA_TYPE_VIDEO].clear();
 
         for (auto& temp : AVStreamIndexToType)
         {
@@ -322,7 +319,7 @@ namespace FFmpegLayer
 
                 int err = AVERROR(EAGAIN);
                 AutoAVFramePtr avf = av_frame_alloc();
-                AutoAVPacketPtr* avp;
+                AutoAVPacketPtr avp;
 
                 while (true)
                 {
@@ -339,12 +336,12 @@ namespace FFmpegLayer
 
                     if (avp == nullptr)continue;
 
-                    if ((*avp).get() == nullptr) return;
+                    if (avp.get() == nullptr) return;
 
-                    AVMediaType index = AVStreamIndexToType[(*avp)->stream_index];
+                    AVMediaType index = AVStreamIndexToType[avp->stream_index];
                     if (index == AVMEDIA_TYPE_VIDEO || index == AVMEDIA_TYPE_AUDIO)
                     {
-                        while ((err = avcodec_send_packet(decode_ctx[index], *avp)) == AVERROR(EAGAIN))
+                        while ((err = avcodec_send_packet(decode_ctx[index], avp)) == AVERROR(EAGAIN))
                             if (local_thread & decode_thread) std::this_thread::sleep_for(1ms);
                             else continue;
 

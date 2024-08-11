@@ -66,7 +66,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
         src/main.cpp src/ParseJson.cpp src/SpiderVideo.cpp src/BaseFFmpeg.cpp src/BaseSDL.cpp
-        inc/BaseFFmpeg.h inc/BaseSDL.h inc/common.hpp inc/Cirucular_Queue.hpp inc/SpiderVideo.h inc/ParseJson.h inc/EncodeString.hpp
+        inc/BaseFFmpeg.h inc/BaseSDL.h inc/common.hpp inc/Circular_Queue.hpp inc/SpiderVideo.h inc/ParseJson.h inc/EncodeString.hpp
         Img.qrc
         ui/nettofiledialog.h ui/nettofiledialog.cpp ui/nettofiledialog.ui ui/holomainwindow.cpp ui/holomainwindow.h ui/holomainwindow.ui
 

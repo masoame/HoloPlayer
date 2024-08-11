@@ -78,7 +78,7 @@ namespace SDLLayer
         target->ThrPlay = std::jthread([&]()->void
 			{
                 std::cout << "create player thread id: " << std::this_thread::get_id() << std::endl;
-				std::unique_ptr < PlayTool, decltype([](void* _this)
+				std::unique_ptr < PlayTool, decltype([](void* _this)->void
 					{
 						auto __this = static_cast<PlayTool*>(_this);
 						__this->local_thread &= ~FFmpegLayer::playing_thread;
@@ -138,7 +138,7 @@ namespace SDLLayer
 
                     while ((frame->pts * secBaseVideo) >= (audio_ptr.first->pts * secBaseAudio))
                     {
-                        if(target->FrameQueue[AVMEDIA_TYPE_VIDEO]->full() && target->FrameQueue[AVMEDIA_TYPE_AUDIO]->empty())
+                        if(target->FrameQueue[AVMEDIA_TYPE_VIDEO].full() && target->FrameQueue[AVMEDIA_TYPE_AUDIO].empty())
                             target->flush_frame(AVMEDIA_TYPE_VIDEO);
                         if(target->local_thread & FFmpegLayer::playing_thread) std::this_thread::sleep_for(1ms);
                         else break;
@@ -251,7 +251,7 @@ namespace SDLLayer
             if(!(_this->target->local_thread & playing_thread)) return;
 
 			if (_this->is_planner)
-				_this->audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second);
+				_this->audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second.get());
             else 
 				_this->audio_buf = audio_frame.first->data[0];
 			_this->audio_pos = _this->audio_buf;

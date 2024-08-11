@@ -14,9 +14,9 @@ namespace SDLLayer
 	using namespace FFmpegLayer;
 	using namespace std::chrono_literals;
 
-	using AutoWindowPtr = AutoPtr<SDL_Window, Functor<SDL_DestroyWindow>, false>;
-	using AutoRendererPtr = AutoPtr<SDL_Renderer, Functor<SDL_DestroyRenderer>, false>;
-	using AutoTexturePtr = AutoPtr<SDL_Texture, Functor<SDL_DestroyTexture>, false>;
+	using AutoWindowPtr = AutoPtr<SDL_Window, Functor<SDL_DestroyWindow>>;
+	using AutoRendererPtr = AutoPtr<SDL_Renderer, Functor<SDL_DestroyRenderer>>;
+	using AutoTexturePtr = AutoPtr<SDL_Texture, Functor<SDL_DestroyTexture>>;
 
 	//把AVSampleFormat格式转化为SDL_AudioFormat
 	extern const SDL_AudioFormat map_audio_formot[13];

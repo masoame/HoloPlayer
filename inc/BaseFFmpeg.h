@@ -17,7 +17,7 @@ extern"C"
 #include <libavutil/imgutils.h>
 }
 #include"common.hpp"
-#include"Cirucular_Queue.hpp"
+#include"Circular_Queue.hpp"
 #include<functional>
 #include<semaphore>
 #include<thread>
@@ -27,18 +27,18 @@ namespace FFmpegLayer
 	using namespace std::chrono_literals;
 
 	//管理内存的智能指针
-	using AutoAVPacketPtr = AutoPtr<AVPacket, Functor<av_packet_free>, true>;
-	using AutoAVCodecContextPtr = AutoPtr<AVCodecContext, Functor<avcodec_free_context>, true>;
-	using AutoAVFormatContextPtr = AutoPtr<AVFormatContext, Functor<avformat_free_context>, false>;
-	using AutoSwsContextPtr = AutoPtr<SwsContext, Functor<sws_freeContext>, false>;
-	using AutoSwrContextPtr = AutoPtr<SwrContext, Functor<swr_free>, true>;
-	using AutoAVFramePtr = AutoPtr<AVFrame, Functor<av_frame_free>, true>;
+	using AutoAVPacketPtr = AutoPtr<AVPacket, Functor<av_packet_free>>;
+	using AutoAVCodecContextPtr = AutoPtr<AVCodecContext, Functor<avcodec_free_context>>;
+	using AutoAVFormatContextPtr = AutoPtr<AVFormatContext, Functor<avformat_free_context>>;
+	using AutoSwsContextPtr = AutoPtr<SwsContext, Functor<sws_freeContext>>;
+	using AutoSwrContextPtr = AutoPtr<SwrContext, Functor<swr_free>>;
+	using AutoAVFramePtr = AutoPtr<AVFrame, Functor<av_frame_free>>;
 
 	//函数回调类型
 	using insert_callback_type = void (*)(AVFrame*&, char*& buf) noexcept;
 
 	using framedata_type = std::pair<AutoAVFramePtr, std::unique_ptr<char[]>>;
-	using auto_framedata_type = std::pair<AutoAVFramePtr, char*>;
+	using auto_framedata_type = std::pair<AutoAVFramePtr, std::unique_ptr<char[]>>;
 	//错误枚举
 	enum RESULT
 	{
@@ -82,10 +82,7 @@ namespace FFmpegLayer
 	{
 	public:
 
-		explicit PlayTool() {
-			FrameQueue[AVMEDIA_TYPE_VIDEO].reset(new Circular_Queue<framedata_type>);
-			FrameQueue[AVMEDIA_TYPE_AUDIO].reset(new Circular_Queue<framedata_type,5>);
-		};
+		explicit PlayTool() {};
 		~PlayTool() { clear(); };
 
 		//打开流
@@ -129,9 +126,14 @@ namespace FFmpegLayer
 	public:
 		
 		//视频帧,音频帧，字幕帧队列[AVMediaType]
-		std::unique_ptr<Circular_Queue_API<framedata_type>> FrameQueue[3];
+		Circular_Queue<std::pair<AutoAVFramePtr, std::unique_ptr<char[]>>> FrameQueue[3]
+		{
+			Circular_Queue<framedata_type>(4),
+			Circular_Queue<framedata_type>(4),
+			Circular_Queue<framedata_type>(1)
+		};
 		//读取到包管理队列
-		Circular_Queue<AutoAVPacketPtr, 8> PacketQueue;
+		Circular_Queue<AVPacket, Functor<av_packet_free>> PacketQueue{ 8 };
 
 		//本地线程状态
 		uint8_t local_thread = 0;
@@ -148,7 +150,7 @@ namespace FFmpegLayer
 		AutoSwrContextPtr swr_ctx;
 
 		//各个工作帧
-		auto_framedata_type avframe_work[6];
+		framedata_type avframe_work[6];
 
 		//insert_callback[AVMediaType(帧格式)] == 处理函数指针
 
