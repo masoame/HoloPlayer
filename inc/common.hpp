@@ -52,7 +52,8 @@ private:
 };
 
 template<class _T1>
-inline void reverse_bit(_T1& val, _T1 local) noexcept requires std::is_pod_v<_T1>
+inline void reverse_bit(std::remove_reference_t<_T1>& val, std::remove_reference_t<_T1> local) noexcept 
+    requires std::is_pod_v<std::remove_reference_t<_T1>>
 {
     val = (val & local) ? (val & (~local)) : (val | local);
 }

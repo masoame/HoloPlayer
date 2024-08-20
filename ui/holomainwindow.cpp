@@ -40,7 +40,6 @@ HoloMainWindow::HoloMainWindow(QWidget *parent)
     : QMainWindow(parent), drivefullwindows(this->ffmpeg_dirver)
     , ui(new Ui::HoloMainWindow)
 {
-
     ui->setupUi(this);
     connect(ui->openFile,SIGNAL(triggered()),this,SLOT(StartOpenFile()));
     connect(ui->netMode,SIGNAL(triggered()),this,SLOT(StartNetMode()));

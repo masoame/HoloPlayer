@@ -18,9 +18,10 @@ public:
 private:
     Ui::NetToFileDialog *ui;
     SpiderVideo::SpiderTool _userdata;
+
 private slots:
     void on_checkUrlBtn_clicked();
-
+    void on_saveFileBtn_clicked();
 };
 
 #endif // NETTOFILEDIALOG_H

@@ -1,7 +1,10 @@
 #include "nettofiledialog.h"
 #include "ui_nettofiledialog.h"
 #include<qmessagebox.h>
+#include<qfiledialog.h>
 #include"ParseJson.h"
+#include<qcheckbox.h>
+
 NetToFileDialog::NetToFileDialog(QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::NetToFileDialog)
@@ -12,6 +15,14 @@ NetToFileDialog::NetToFileDialog(QWidget *parent)
 NetToFileDialog::~NetToFileDialog()
 {
     delete ui;
+}
+
+void NetToFileDialog::on_saveFileBtn_clicked()
+{
+    QString filepath = QFileDialog::getExistingDirectory(this, tr("请选择保存地址"), tr("./"));
+    if (filepath.isEmpty() || filepath == "") return;
+    this->ui->pathEdit->setText(filepath);
+
 }
 
 void NetToFileDialog::on_checkUrlBtn_clicked()
@@ -39,8 +50,21 @@ void NetToFileDialog::on_checkUrlBtn_clicked()
     if (code != CURLE_OK) return;
 
     auto results = ParseJson::ParseBilibili(_userdata.buffer.data());
-    if (code != CURLE_OK) return;
+    if (results.has_value() == false) return;
 
-    //ui->downloadUrlListView->setModel();
+    for (auto &_str : results.value())
+    {
+        
+        QListWidgetItem* _item = new QListWidgetItem();
+        QCheckBox* _checkbox = new QCheckBox();
+        QSize size(32, 32);
+        ui->listWidget->addItem(_item);
+        ui->listWidget->setItemWidget(_item, _checkbox);
+        _checkbox->setBaseSize(size);
+        _checkbox->setText("dsds");
+
+        qDebug() << ui->listWidget->count() << "\n";
+    }
+    
 
 }

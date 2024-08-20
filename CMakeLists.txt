@@ -57,19 +57,20 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS OpenGLWidgets)
 
 
+file(GLOB ADD_SOURCE_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp)
+file(GLOB ADD_INCLUDE_FILES ${PROJECT_SOURCE_DIR}/inc/*.h ${PROJECT_SOURCE_DIR}/inc/*.hpp)
+file(GLOB ADD_UI_FILES ${PROJECT_SOURCE_DIR}/ui/*.ui ${PROJECT_SOURCE_DIR}/ui/*.cpp ${PROJECT_SOURCE_DIR}/ui/*.h)
 
-set(PROJECT_SOURCES
-)
+set(PROJECT_SOURCES)
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(holoPlayer
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
-        src/main.cpp src/ParseJson.cpp src/SpiderVideo.cpp src/BaseFFmpeg.cpp src/BaseSDL.cpp
-        inc/BaseFFmpeg.h inc/BaseSDL.h inc/common.hpp inc/Circular_Queue.hpp inc/SpiderVideo.h inc/ParseJson.h inc/EncodeString.hpp
+        ${ADD_SOURCE_FILES}
+        ${ADD_INCLUDE_FILES}
+        ${ADD_UI_FILES}
         Img.qrc
-        ui/nettofiledialog.h ui/nettofiledialog.cpp ui/nettofiledialog.ui ui/holomainwindow.cpp ui/holomainwindow.h ui/holomainwindow.ui
-
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET holoPlayer APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

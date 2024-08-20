@@ -67,11 +67,7 @@ namespace FFmpegLayer
 
     RESULT PlayTool::init_encode(AVMediaType type)
     {
-        //if(avformat_alloc_output_context2(&avfctx_output, fmt, url, nullptr)<0);
-        //if (avio_open(&pFormatCtx->pb, outputPath, AVIO_FLAG_READ_WRITE) < 0)
-            //LOGE("Failed to open output file! \n");
-            //return false;
-        //}
+
         return RESULT();
     }
 
