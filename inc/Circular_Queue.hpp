@@ -12,7 +12,7 @@ class Circular_Queue
 	using _ElementPtrType = std::conditional_t<std::is_null_pointer_v<_DeleteFunctionType>, std::unique_ptr<_Type>, AutoPtr<_Type, _DeleteFunctionType>>;
 public:
 
-	explicit Circular_Queue(unsigned char _bit_number = 4) :_mask(~((~0) << _bit_number))
+	 Circular_Queue(unsigned char _bit_number = 4) :_mask(~((~0) << _bit_number))
 	{
 		assert(_bit_number >= 1, "_bit_number is too few");
 		assert(_bit_number <= 64, "_bit_number is too much");
@@ -30,7 +30,7 @@ public:
 	}
 
 	template<class ...Args>
-	bool try_push(Args&& ...target) noexcept
+	bool try_emplace(Args&& ...target) noexcept
 	{
 		std::unique_lock _lock(_push_mtx);
 		if (full()) return false;

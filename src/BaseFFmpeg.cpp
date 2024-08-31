@@ -22,6 +22,7 @@ namespace FFmpegLayer
         AV_SAMPLE_FMT_S64,
         AV_SAMPLE_FMT_NONE
     };
+
     RESULT PlayTool::open(const char* srcUrl, const char* dstUrl, unsigned char type)
     {
         this->clear();
@@ -131,7 +132,7 @@ namespace FFmpegLayer
         if (insert_callback[index] != nullptr)
             insert_callback[index](avf, userdata);
 
-        while (!FrameQueue[index].try_push(std::move(avf),userdata) && (local_thread & decode_thread))
+        while (!FrameQueue[index].try_emplace(std::move(avf),userdata) && (local_thread & decode_thread))
             std::this_thread::sleep_for(1ms);
 
         avf = av_frame_alloc();
@@ -261,7 +262,7 @@ namespace FFmpegLayer
     RESULT PlayTool::start_read_thread() noexcept
     {
         local_thread |= read_thread;
-        ThrRead = std::jthread([&]()->void
+        ThrRead = std::jthread([this]()->void
             {
                 std::cout << "create read thread id: " << std::this_thread::get_id() << std::endl;
                 std::unique_ptr < PlayTool, decltype([](void* _this) ->void

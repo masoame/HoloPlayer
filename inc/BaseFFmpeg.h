@@ -126,14 +126,9 @@ namespace FFmpegLayer
 	public:
 		
 		//视频帧,音频帧，字幕帧队列[AVMediaType]
-		Circular_Queue<std::pair<AutoAVFramePtr, std::unique_ptr<char[]>>> FrameQueue[3]
-		{
-			Circular_Queue<framedata_type>(4),
-			Circular_Queue<framedata_type>(4),
-			Circular_Queue<framedata_type>(1)
-		};
+		Circular_Queue<std::pair<AutoAVFramePtr, std::unique_ptr<char[]>>> FrameQueue[3]{ 3,4,1 };
 		//读取到包管理队列
-		Circular_Queue<AVPacket, Functor<av_packet_free>> PacketQueue{ 8 };
+		Circular_Queue<AVPacket, Functor<av_packet_free>> PacketQueue{ 7 };
 
 		//本地线程状态
 		uint8_t local_thread = 0;
@@ -153,9 +148,7 @@ namespace FFmpegLayer
 		framedata_type avframe_work[6];
 
 		//insert_callback[AVMediaType(帧格式)] == 处理函数指针
-
 		std::function<void(AVFrame*&, char*& buf)> insert_callback[6];
-
 
 		// AVStreamIndexToType[流的索引] == 流类型
 		AVMediaType AVStreamIndexToType[6]{ AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN ,AVMEDIA_TYPE_UNKNOWN,AVMEDIA_TYPE_UNKNOWN };
