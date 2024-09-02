@@ -1,6 +1,7 @@
 #include "holomainwindow.h"
 #include "./ui_holomainwindow.h"
 #include "nettofiledialog.h"
+#include"HoloTitleWidget.h"
 
 
 #include "QMessageBox"
@@ -40,7 +41,12 @@ HoloMainWindow::HoloMainWindow(QWidget *parent)
     : QMainWindow(parent), drivefullwindows(this->ffmpeg_dirver)
     , ui(new Ui::HoloMainWindow)
 {
+    setWindowFlags(Qt::FramelessWindowHint /*| Qt::WindowSystemMenuHint*/ | Qt::WindowMinimizeButtonHint);
     ui->setupUi(this);
+    QWidget* emTitle = new QWidget(this);
+    ui->dockTitleWidget->setTitleBarWidget(emTitle);
+    auto title = new HoloTitleWidget(nullptr);
+    ui->dockTitleWidget->setWidget(title);
     connect(ui->openFile,SIGNAL(triggered()),this,SLOT(StartOpenFile()));
     connect(ui->netMode,SIGNAL(triggered()),this,SLOT(StartNetMode()));
     timer_id = this->startTimer(250);

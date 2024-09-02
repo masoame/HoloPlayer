@@ -24,17 +24,35 @@
     {
       "hidden": true,
       "name": "Qt-Default",
-      "inherits": null,
+      "inherits": "6.7.0_msvc2019_64",
       "vendor": {
         "qt-project.org/Default": {
-          "checksum": "VoalogTkyWuFomeO1TLFx0olLJ4="
+          "checksum": "/LIi1Qk9rOuZl7aAva45VvwngbI="
+        }
+      }
+    },
+    {
+      "hidden": true,
+      "name": "6.7.0_msvc2019_64",
+      "inherits": "Qt",
+      "environment": {
+        "QTDIR": "D:/Qt/6.7.0/msvc2019_64"
+      },
+      "architecture": {
+        "strategy": "external",
+        "value": "x64"
+      },
+      "generator": "Ninja",
+      "vendor": {
+        "qt-project.org/Version": {
+          "checksum": "gkCoHSl+XMdfaRWZjdB3CxH5GZo="
         }
       }
     }
   ],
   "vendor": {
     "qt-project.org/Presets": {
-      "checksum": "i5Gqmc7ysIeSC/6rWaFN614XI2o="
+      "checksum": "P7xM4X2fdctqEMDTwDxKCbD6ENo="
     }
   }
 }

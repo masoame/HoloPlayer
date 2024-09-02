@@ -16,8 +16,8 @@ namespace SpiderVideo
      	curl_slist_free_all(list);
      }
 
-    using AutoCURLPtr = ::AutoPtr<CURL, Functor<_curl_easy_cleanup>>;
-    using AutoCurl_slistPtr = ::AutoPtr<curl_slist, Functor<_curl_slist_free_all>>;
+    using AutoCURLPtr = ::common::AutoHandle<CURL, ::common::Functor<_curl_easy_cleanup>>;
+    using AutoCurl_slistPtr = ::common::AutoHandle<curl_slist, ::common::Functor<_curl_slist_free_all>>;
 
 	enum RequestType
 	{
