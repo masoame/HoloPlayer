@@ -41,15 +41,16 @@ HoloMainWindow::HoloMainWindow(QWidget *parent)
     : QMainWindow(parent), drivefullwindows(this->ffmpeg_dirver)
     , ui(new Ui::HoloMainWindow)
 {
-    setWindowFlags(Qt::FramelessWindowHint /*| Qt::WindowSystemMenuHint*/ | Qt::WindowMinimizeButtonHint);
     ui->setupUi(this);
-    QWidget* emTitle = new QWidget(this);
-    ui->dockTitleWidget->setTitleBarWidget(emTitle);
-    auto title = new HoloTitleWidget(nullptr);
-    ui->dockTitleWidget->setWidget(title);
-    connect(ui->openFile,SIGNAL(triggered()),this,SLOT(StartOpenFile()));
-    connect(ui->netMode,SIGNAL(triggered()),this,SLOT(StartNetMode()));
+
+    ui->dockTitleWidget->setTitleBarWidget(new QWidget(ui->dockTitleWidget));
+    ui->dockTitleWidget->setWidget(new HoloTitleWidget(ui->dockTitleWidget));
+
     timer_id = this->startTimer(250);
+    
+    connect(ui->openFile, &QAction::triggered,this, &HoloMainWindow::StartOpenFile);
+    connect(ui->netMode, &QAction::triggered,this, &HoloMainWindow::StartNetMode);
+    
 }
 
 HoloMainWindow::~HoloMainWindow()
@@ -60,13 +61,11 @@ HoloMainWindow::~HoloMainWindow()
 void HoloMainWindow::on_stop_play_clicked()
 {
     if (this->drivefullwindows.target==nullptr || this->drivefullwindows.target->ThrPlay.joinable() == false) return;
-    if (this->drivefullwindows.target->local_thread & SDLLayer::playing_thread)
-    {
+    if (this->drivefullwindows.target->local_thread & SDLLayer::playing_thread){
         SDL_PauseAudioDevice(this->drivefullwindows.device_id, 1);
         this->drivefullwindows.target->stop(SDLLayer::playing_thread);
     }
-    else if(this->drivefullwindows.target->ThrPlay.joinable())
-    {
+    else if(this->drivefullwindows.target->ThrPlay.joinable()){
         SDL_PauseAudioDevice(this->drivefullwindows.device_id, 0);
         this->drivefullwindows.target->run(SDLLayer::playing_thread);
     }
@@ -80,8 +79,7 @@ void HoloMainWindow::timerEvent(QTimerEvent * event)
 
     auto& audio_ptr = this->drivefullwindows.target->avframe_work[AVMEDIA_TYPE_AUDIO].first;
     if(audio_ptr==nullptr)return;
-    if(!ui->time_slider->isSliderDown())
-    {
+    if(!ui->time_slider->isSliderDown()){
         int sec=audio_ptr->pts * this->drivefullwindows.target->secBaseTime[AVMEDIA_TYPE_AUDIO];
         ui->timestamp->setText(QString::asprintf("%02d:%02d", sec / 60, sec % 60));
         ui->time_slider->setValue(sec);
@@ -131,6 +129,12 @@ void HoloMainWindow::StartNetMode()
     auto a = new NetToFileDialog(this);
     a->setAttribute(Qt::WA_DeleteOnClose);
     a->exec();
+}
+void HoloMainWindow::closeWindow()
+{
+    qDebug() << "closeWindow";
+    this->close();
+
 }
 void HoloMainWindow::on_volume_slider_valueChanged(int value)
 {

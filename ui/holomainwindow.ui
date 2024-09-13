@@ -201,7 +201,6 @@ QPushButton:pressed {
    <addaction name="file_menu"/>
    <addaction name="menu"/>
   </widget>
-  <widget class="QStatusBar" name="statusbar"/>
   <widget class="QDockWidget" name="dockTitleWidget">
    <attribute name="dockWidgetArea">
     <number>4</number>

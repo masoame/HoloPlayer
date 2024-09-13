@@ -31,6 +31,9 @@ private slots:
     void StartNetMode();
 
 private:
+
+    void closeWindow();
+
     Ui::HoloMainWindow *ui;
     FFmpegLayer::PlayTool ffmpeg_dirver;
     SDLLayer::DriveFullWindow drivefullwindows;

@@ -29,8 +29,24 @@
    </item>
    <item>
     <widget class="QPushButton" name="minimizeButton">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>20</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QPushButton:!hover {    
+        border:none;                                       
+        image:url(:/Image/icon/Image/icon/dash-lg.png);   
+}                      
+QPushButton:hover {                                  
+        image:url(:/Image/icon/Image/icon/dash-lg.png);   
+}                                               
+</string>
+     </property>
      <property name="text">
-      <string>PushButton</string>
+      <string/>
      </property>
     </widget>
    </item>
@@ -39,7 +55,7 @@
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>25</height>
+       <height>20</height>
       </size>
      </property>
      <property name="styleSheet">
@@ -66,7 +82,7 @@
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>25</height>
+       <height>20</height>
       </size>
      </property>
      <property name="styleSheet">

@@ -13,4 +13,9 @@ public:
 
 private:
 	Ui::HoloTitleWidgetClass ui;
+
+signals:
+		void signal_close_clicked();
+public:
+		void OnMaxBtnClicked();
 };
