@@ -11,11 +11,14 @@ public:
 	HoloTitleWidget(QWidget *parent = nullptr);
 	~HoloTitleWidget();
 
+	void mousePressEvent(QMouseEvent* event);
+	void mouseMoveEvent(QMouseEvent* event);
+	void OnMaxBtnClicked();
+
 private:
 	Ui::HoloTitleWidgetClass ui;
+	QPoint m_dragStartPosition;
 
 signals:
 		void signal_close_clicked();
-public:
-		void OnMaxBtnClicked();
 };
