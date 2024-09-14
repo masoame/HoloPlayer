@@ -98,10 +98,11 @@ namespace FFmpegLayer
 		RESULT init_sws(AVFrame* work, const AVPixelFormat dstFormat = AV_PIX_FMT_YUV420P, const int dstW = 0, const int dstH = 0);
 		//转化为
 		RESULT sws_scale_420P(AVFrame*& data);
-		//本地音视频解码
+		//音视频包读取线程
 		RESULT start_read_thread() noexcept;
+		//解码线程
 		RESULT start_decode_thread() noexcept;
-		//本地音视频编码
+		//编码线程
 		RESULT start_encode_thread() noexcept;
 		//音视频拉流解码线程
 		RESULT start_pull_steam_thread() noexcept;

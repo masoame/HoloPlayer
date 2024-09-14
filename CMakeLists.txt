@@ -27,9 +27,11 @@ add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
 
 set(CMAKE_PREFIX_PATH "D:/Qt/6.7.0/msvc2019_64")
 file(MAKE_DIRECTORY ${PROJECT_SOURCE_DIR}/out/build)
-file(COPY ${CMAKE_PREFIX_PATH}/plugins DESTINATION ${PROJECT_SOURCE_DIR}/out/build)
-file(GLOB DLL_FILE ${CMAKE_PREFIX_PATH}/bin/*.dll)
-file(COPY ${DLL_FILE} DESTINATION ${PROJECT_SOURCE_DIR}/out/build)
+
+#第一次打开CMake时，请使用以下配置环境
+#file(COPY ${CMAKE_PREFIX_PATH}/plugins DESTINATION ${PROJECT_SOURCE_DIR}/out/build)
+#file(GLOB DLL_FILE ${CMAKE_PREFIX_PATH}/bin/*.dll)
+#file(COPY ${DLL_FILE} DESTINATION ${PROJECT_SOURCE_DIR}/out/build)
 
 ##----------------------------------------------------------------------------------------------------------------------------
 

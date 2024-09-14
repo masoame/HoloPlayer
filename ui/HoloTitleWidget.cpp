@@ -1,19 +1,41 @@
 #include "HoloTitleWidget.h"
 #include <QMainWindow>
 #include <QMouseEvent>
+#include <QMenu>
+#include <qmenubar.h>
+#include<qtoolbutton.h>
+
+const QString format = "QToolButton::menu-indicator{width:0px;}QToolButton{ margin:-3px;}";
+
 HoloTitleWidget::HoloTitleWidget(QWidget *parent)
 	: QWidget(parent)
 {
-    Q_ASSERT(parent != nullptr);
-
 	ui.setupUi(this);
 
     auto _parent = parent->parentWidget();
     _parent->setWindowFlags(Qt::FramelessWindowHint /*| Qt::WindowSystemMenuHint*/ | Qt::WindowMinimizeButtonHint);
+
 	connect(ui.closeButton, &QPushButton::clicked, _parent, &QWidget::close);
 	connect(ui.maximizeButton, &QPushButton::clicked, this, &HoloTitleWidget::OnMaxBtnClicked);
     connect(ui.minimizeButton, &QPushButton::clicked, _parent, &QWidget::showMinimized);
-    //connect();
+    
+    auto menuBar = qobject_cast<QMainWindow*>(_parent)->menuBar();
+    for (auto& obj : menuBar->children())
+    {
+        auto menu = qobject_cast<QMenu*>(obj);
+        if (menu == nullptr)continue;
+
+        auto btn = new QToolButton(this);
+        btn->setText(menu->title());
+        btn->setMinimumSize(QSize(55, 25));
+
+        btn->setMenu(menu);
+        btn->setPopupMode(QToolButton::InstantPopup);
+        ui.menuLayout->addWidget(btn);
+        btn->setStyleSheet(format);
+    }
+    menuBar->hide();
+
 }
 
 HoloTitleWidget::~HoloTitleWidget()

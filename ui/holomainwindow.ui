@@ -191,15 +191,16 @@ QPushButton:pressed {
      <string>文件</string>
     </property>
     <addaction name="openFile"/>
+    <addaction name="saveFile"/>
    </widget>
-   <widget class="QMenu" name="menu">
+   <widget class="QMenu" name="tool_menu">
     <property name="title">
      <string>工具</string>
     </property>
     <addaction name="netMode"/>
    </widget>
    <addaction name="file_menu"/>
-   <addaction name="menu"/>
+   <addaction name="tool_menu"/>
   </widget>
   <widget class="QDockWidget" name="dockTitleWidget">
    <attribute name="dockWidgetArea">
@@ -215,6 +216,11 @@ QPushButton:pressed {
   <action name="netMode">
    <property name="text">
     <string>网络模式</string>
+   </property>
+  </action>
+  <action name="saveFile">
+   <property name="text">
+    <string>保存</string>
    </property>
   </action>
  </widget>
