@@ -61,7 +61,6 @@ namespace FFmpegLayer
 		playing_thread = 0x01,
 		read_thread = 0x02,
 		decode_thread = 0x04,
-		delete_thread = 0x08
 	};
 
 	//输入或输出帧格式

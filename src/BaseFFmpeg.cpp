@@ -1,6 +1,6 @@
 #include"BaseFFmpeg.h"
 #include<iostream>
-
+#include<syncstream>
 namespace FFmpegLayer
 {
     //sample_bit_size[AVSampleFormat(音频采样格式)] == 采样点的大小
@@ -217,23 +217,24 @@ namespace FFmpegLayer
 
     void PlayTool::clear(const char type) noexcept
     {
-        local_thread |= delete_thread;
         if (ThrPlay.joinable() && type & playing_thread)
         {
+            ThrPlay.request_stop();
             local_thread &= ~playing_thread;
             if (ThrPlay.joinable())ThrPlay.join();
         }
         if (ThrDecode.joinable() && type & decode_thread)
         {
+            ThrDecode.request_stop();
             local_thread &= ~decode_thread;
             if (ThrDecode.joinable())ThrDecode.join();
         }
         if (ThrRead.joinable() && type & read_thread)
         {
+            ThrRead.request_stop();
             local_thread &= ~read_thread;
             if (ThrRead.joinable())ThrRead.join();
         }
-        local_thread &= ~delete_thread;
     }
 
     void PlayTool::clear() noexcept
@@ -256,34 +257,30 @@ namespace FFmpegLayer
         {
             temp = -1;
         }
-        local_thread &= ~delete_thread;
     }
 
     RESULT PlayTool::start_read_thread() noexcept
     {
         local_thread |= read_thread;
-        ThrRead = std::jthread([this]()->void
-            {
-                std::cout << "create read thread id: " << std::this_thread::get_id() << std::endl;
-                std::unique_ptr < PlayTool, decltype([](void* _this) ->void
-                    {
-                        auto __this = static_cast<PlayTool*>(_this);
-                        __this->local_thread &= ~read_thread;
-                        __this->PacketQueue.try_push(nullptr);
-                        std::cout << "exit read thread id: " << std::this_thread::get_id() << std::endl;
-                    }) > end(this);
 
-                AutoAVPacketPtr avp;
+        ThrRead = std::jthread([this](std::stop_token st)->void
+            {
+                std::stop_callback end_read_callback(st, [this]()->void {
+                    this->local_thread &= ~read_thread;
+                    this->PacketQueue.try_push(nullptr);
+                    std::osyncstream{ std::cout } << "success exit read thread"  << std::endl;
+                });
+
                 int err = AVERROR(EAGAIN);
-                while (true)
+                while (st.stop_requested() == false)
                 {
-                    if (!(local_thread & read_thread))
+                    if ((local_thread & read_thread) == false)
                     {
-                        if (local_thread & delete_thread) return;
+                        if (st.stop_requested() == true) return;
                         wait_read_pause.release();
                         run_read_thread.acquire();
                     }
-                    avp.reset(av_packet_alloc());
+                    AutoAVPacketPtr avp(av_packet_alloc());
                     err = av_read_frame(avfctx_input, avp);
                     if ((err < 0) || (err == AVERROR_EOF))
                     {
@@ -292,37 +289,35 @@ namespace FFmpegLayer
                     }
                     while (!PacketQueue.try_push(std::move(avp)))
                     {
-                        if (!(local_thread & read_thread)) break;
-                        else std::this_thread::sleep_for(1ms);
+                        if ((local_thread & read_thread)==false) break;
+                        else std::this_thread::sleep_for(1ms);;
                     }
                 }
             });
+        std::osyncstream{ std::cout } << "create read thread id: " << ThrRead.get_id() << std::endl;
         return SUCCESS;
     }
 
     RESULT PlayTool::start_decode_thread() noexcept
     {
         local_thread |= decode_thread;
-        ThrDecode = std::jthread([&]()->void
+        ThrDecode = std::jthread([&](std::stop_token st)->void
             {
-                std::cout << "create decode thread id: " << std::this_thread::get_id() << std::endl;
-                std::unique_ptr <PlayTool, decltype([](void* _this) ->void
-                    {
-                        auto __this = static_cast<PlayTool*>(_this);
-                        __this->local_thread &= ~decode_thread;
-                        __this->insert_queue(AVMEDIA_TYPE_VIDEO, nullptr);
-                        std::cout << "exit decode thread id: " << std::this_thread::get_id() << std::endl;
-                    }) > end(this);
+               std::stop_callback end_read_callback(st, [this]()->void {
+                   this->local_thread &= ~decode_thread;
+                   this->insert_queue(AVMEDIA_TYPE_VIDEO, nullptr);
+                    std::osyncstream{ std::cout } << "success exit decode thread" << std::endl;
+               });
 
                 int err = AVERROR(EAGAIN);
                 AutoAVFramePtr avf = av_frame_alloc();
                 AutoAVPacketPtr avp;
 
-                while (true)
+                while (st.stop_requested() == false)
                 {
                     if (!(local_thread & decode_thread))
                     {
-                        if (local_thread & delete_thread) return;
+                        if (st.stop_requested() == true) return;
                         wait_decode_pause.release();
                         run_decode_thread.acquire();
                     }
@@ -332,8 +327,6 @@ namespace FFmpegLayer
                         else break;
 
                     if (avp == nullptr)continue;
-
-                    if (avp.get() == nullptr) return;
 
                     AVMediaType index = AVStreamIndexToType[avp->stream_index];
                     if (index == AVMEDIA_TYPE_VIDEO || index == AVMEDIA_TYPE_AUDIO)
@@ -354,6 +347,7 @@ namespace FFmpegLayer
                     else {}
                 }
             });
+        std::osyncstream{ std::cout } << "create decode thread id: " << ThrDecode.get_id() << std::endl;
         return SUCCESS;
     }
 

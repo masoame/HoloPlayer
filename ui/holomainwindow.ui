@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>658</width>
-    <height>540</height>
+    <width>784</width>
+    <height>520</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,12 +18,15 @@
     <item>
      <layout class="QGridLayout" name="gridLayout_2">
       <item row="0" column="0">
-       <widget class="QOpenGLWidget" name="openGLWidget">
+       <widget class="QLabel" name="openGLWidget">
         <property name="minimumSize">
          <size>
           <width>480</width>
           <height>360</height>
          </size>
+        </property>
+        <property name="text">
+         <string>TextLabel</string>
         </property>
        </widget>
       </item>
@@ -34,6 +37,28 @@
       <property name="sizeConstraint">
        <enum>QLayout::SizeConstraint::SetMinimumSize</enum>
       </property>
+      <item row="3" column="1">
+       <widget class="QSlider" name="time_slider">
+        <property name="minimumSize">
+         <size>
+          <width>200</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="tracking">
+         <bool>true</bool>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
       <item row="3" column="3">
        <widget class="QPushButton" name="pushButton">
         <property name="minimumSize">
@@ -126,28 +151,6 @@ QPushButton:pressed {
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
-       <widget class="QSlider" name="time_slider">
-        <property name="minimumSize">
-         <size>
-          <width>350</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>16777215</width>
-          <height>25</height>
-         </size>
-        </property>
-        <property name="tracking">
-         <bool>true</bool>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Orientation::Horizontal</enum>
-        </property>
-       </widget>
-      </item>
       <item row="3" column="4">
        <widget class="QSlider" name="volume_slider">
         <property name="minimumSize">
@@ -182,7 +185,7 @@ QPushButton:pressed {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>658</width>
+     <width>784</width>
      <height>33</height>
     </rect>
    </property>

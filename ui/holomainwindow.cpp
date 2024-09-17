@@ -2,10 +2,11 @@
 #include "./ui_holomainwindow.h"
 #include "nettofiledialog.h"
 #include"HoloTitleWidget.h"
-
-
 #include "QMessageBox"
 #include "qfiledialog.h"
+
+#include <iostream>
+#include <syncstream>
 
 constexpr const char str_StyleSheet_stop[]="            \
     QPushButton:!hover{                                 \
@@ -42,6 +43,8 @@ HoloMainWindow::HoloMainWindow(QWidget *parent)
     , ui(new Ui::HoloMainWindow)
 {
     ui->setupUi(this);
+    ui->openGLWidget->setUpdatesEnabled(false);
+    ui->openGLWidget->setAttribute(Qt::WA_OpaquePaintEvent);
 
     ui->dockTitleWidget->setTitleBarWidget(new QWidget(ui->dockTitleWidget));
     ui->dockTitleWidget->setWidget(new HoloTitleWidget(ui->dockTitleWidget));
@@ -90,6 +93,29 @@ void HoloMainWindow::timerEvent(QTimerEvent * event)
         ui->stop_play->setStyleSheet(str_StyleSheet_stop);
 }
 
+void HoloMainWindow::resizeEvent(QResizeEvent* event)
+{
+    int scr_width = this->ui->openGLWidget->width();
+    int scr_height = this->ui->openGLWidget->height();
+    int width, height, x, y;
+
+    height = scr_height;
+    width = lrint(height * this->drivefullwindows.aspect_ratio) & ~1;
+    if (width > scr_width)
+    {
+        width = scr_width;
+        height = lrint(width / this->drivefullwindows.aspect_ratio) & ~1;
+    }
+    x = (scr_width - width) / 2;
+    y = (scr_height - height) / 2;
+
+    this->drivefullwindows.rect.x = x;
+    this->drivefullwindows.rect.y = y;
+    this->drivefullwindows.rect.w = width;
+    this->drivefullwindows.rect.h = height;
+    this->drivefullwindows.isChangeSize = true;
+}
+
 bool temp_isrun = false;
 void HoloMainWindow::on_time_slider_sliderReleased()
 {
@@ -116,7 +142,9 @@ void HoloMainWindow::StartOpenFile()
     QString filepath = QFileDialog::getOpenFileName(this, tr("打开文件"), "./", tr("video files(*.mp4 *.mkv *.flv);;All files(*.*)"));
     if (filepath.isEmpty() || filepath == "") return;
     if (ffmpeg_dirver.open(filepath.toStdString().c_str()) != FFmpegLayer::SUCCESS) return;
-    this->drivefullwindows.InitPlayer("show_windows");
+
+    this->drivefullwindows.InitPlayer(this->ui->openGLWidget->width(), this->ui->openGLWidget->height(),reinterpret_cast<void*>(this->ui->openGLWidget->winId()));
+
     this->drivefullwindows.StartPlayer();
     int sec = this->drivefullwindows.target->avfctx_input->duration / AV_TIME_BASE;
     ui->total_time->setText(QString::number(sec / 60) + ":" + QString::number(sec % 60));

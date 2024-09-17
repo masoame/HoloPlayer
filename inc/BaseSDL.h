@@ -27,6 +27,7 @@ namespace SDLLayer
 	{
 	public:
 		PlayTool* target = nullptr;
+		bool isChangeSize = false;
 		//----------------------------------------------------AUDIO------------------------------------------------------------------
 	 private:
 		//音频缓存指针
@@ -44,16 +45,17 @@ namespace SDLLayer
 		char volume= static_cast<char>(SDL_MIX_MAXVOLUME);
 		//音频识别符
 		SDL_AudioDeviceID device_id = 0;
+		//窗口信息
+		SDL_Rect rect{ 0 };
+		float aspect_ratio;
 		//-----------------------------------------------------VIDEO------------------------------------------------------------------
-	private:
+	//private:
 		//视频句柄
 		AutoWindowPtr SDL_win;
 		//渲染器
 		AutoRendererPtr SDL_renderer;
 		//纹理
 		AutoTexturePtr SDL_texture;
-		//窗口信息
-		SDL_Rect rect{ 0 };
 		//SDL材质选择
 		SDL_PixelFormatEnum pixel_format;
 		//是否需要转化帧格式
@@ -75,7 +77,7 @@ namespace SDLLayer
 		//初始化音频播放环境
 		void InitAudio(SDL_AudioCallback callback);
 		//初始化视频环境
-		void InitVideo(const char* title);
+		void InitVideo(void* windows, int width, int height);
 		//初始化帧转化器
 
 
@@ -83,7 +85,7 @@ namespace SDLLayer
 		static void SDLCALL default_callback(void* userdata, Uint8* stream, int len);
 
 		//初始化播放环境
-		void InitPlayer(const char* WindowName, SDL_AudioCallback callback = default_callback);
+		void InitPlayer(int width, int height, void* win_handle = nullptr, SDL_AudioCallback callback = default_callback);
 		//开始播放
 		void StartPlayer() noexcept;
 	};

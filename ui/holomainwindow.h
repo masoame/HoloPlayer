@@ -40,5 +40,6 @@ private:
     int timer_id;
 protected:
     void timerEvent(QTimerEvent * event) override;
+    void resizeEvent(QResizeEvent *event) override;
 };
 #endif // HOLOMAINWINDOW_H
