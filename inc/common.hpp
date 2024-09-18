@@ -39,8 +39,8 @@ namespace common
 	struct AutoHandle
 	{
 		using _Type = std::remove_reference_t<_T>;
-		static_assert(std::is_invocable_v< _FreeFunc::value_type, _Type**> || std::is_invocable_v<_FreeFunc::value_type, _Type*>);
-		constexpr static bool isSecPtr = std::is_invocable_v<_FreeFunc::value_type, _Type**>;
+		static_assert(std::is_invocable_v<typename _FreeFunc::value_type, _Type**> || std::is_invocable_v<typename _FreeFunc::value_type, _Type*>);
+		constexpr static bool isSecPtr = std::is_invocable_v<typename _FreeFunc::value_type, _Type**>;
 
 		AutoHandle() noexcept {}
 		AutoHandle(AutoHandle& _handle) = delete;
@@ -120,12 +120,12 @@ namespace common
 	* _IsThreadSafe == false 时，队列在一读一写的情况下是线程安全的，但是在多读多写的情况下，需要用户自行保证线程安全。
 	* _buf_level 用于设置队列的大小，默认为4，最大为64。 实际大小为2的_buf_level次方。
 	*/
-	template<class _T, class _DeleteFunctionType = nullptr_t, bool _IsThreadSafe = false>
+	template<class _T, class _DeleteFunctionType = std::nullptr_t, bool _IsThreadSafe = false>
 	class circular_queue
 	{
 		using _Type = std::remove_reference<_T>::type;
 		using _ElementPtrType = std::conditional_t<std::is_null_pointer_v<_DeleteFunctionType>, std::unique_ptr<_Type>, AutoHandle<_Type, _DeleteFunctionType>>;
-		using _HasMutex = std::conditional_t<_IsThreadSafe, std::mutex, nullptr_t>;
+		using _HasMutex = std::conditional_t<_IsThreadSafe, std::mutex, std::nullptr_t>;
 		using _IsLock = std::conditional_t<_IsThreadSafe, std::unique_lock<std::mutex>, nullptr_t>;
 
 	public:
@@ -252,7 +252,7 @@ namespace common
 
 		void push_back(_Type&& value)
 		{
-			std::unique_lock<std::mutex> lock(_mtx);
+			std::unique_lock lock(_mtx);
 			_cv_could_push.wait(lock, [this] { return (_queue.size() < this->_max_size) || _is_closed; });
 			if (_is_closed) throw std::runtime_error("enqueue on closed BoundedQueue");
 			_queue.push_back(std::move(value));
@@ -261,7 +261,7 @@ namespace common
 
 		void push_back(const _Type& value)
 		{
-			std::unique_lock<std::mutex> lock(_mtx);
+			std::unique_lock lock(_mtx);
 			_cv_could_push.wait(lock, [this] { return (_queue.size() < this->_max_size) || _is_closed; });
 			if (_is_closed) throw std::runtime_error("enqueue on closed BoundedQueue");
 			_queue.push_back(value);

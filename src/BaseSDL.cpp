@@ -44,64 +44,63 @@ namespace SDLLayer
 		{ AV_PIX_FMT_NONE,           SDL_PIXELFORMAT_UNKNOWN }
 	};
 
-	DriveFullWindow::DriveFullWindow(FFmpegLayer::PlayTool& rely)
+	DriveWindow::DriveWindow(FFmpegLayer::PlayTool* rely)
 	{
-		target = &rely;
+		play_tool.reset(rely);
 	}
 
-	DriveFullWindow::~DriveFullWindow()
+	DriveWindow::~DriveWindow()
 	{
 		SDL_CloseAudioDevice(device_id);
-		if (target != nullptr) target->clear();
+		if (play_tool != nullptr) play_tool->clear();
 		SDL_texture.reset(nullptr);
 		SDL_renderer.reset(nullptr);
 		SDL_win.reset(nullptr);
-		target = nullptr;
+		play_tool = nullptr;
 	}
 
-	void DriveFullWindow::InitPlayer(int width, int height, void* win_handle, SDL_AudioCallback callback)
+	void DriveWindow::InitPlayer(int width, int height, void* win_handle, SDL_AudioCallback callback)
 	{
-		if (target == nullptr)return;
+		if (play_tool == nullptr)return;
 		InitAudio(callback);
 		InitVideo(win_handle, width, height);
-		target->insert_callback[AVMEDIA_TYPE_VIDEO] = std::bind(&DriveFullWindow::convert_video_frame, this, std::placeholders::_1, std::placeholders::_2);
-		target->insert_callback[AVMEDIA_TYPE_AUDIO] = std::bind(&DriveFullWindow::convert_audio_frame, this, std::placeholders::_1, std::placeholders::_2);
-		target->start_read_thread();
-		target->start_decode_thread();
+		play_tool->insert_callback[AVMEDIA_TYPE_VIDEO] = std::bind(&DriveWindow::convert_video_frame, this, std::placeholders::_1, std::placeholders::_2);
+		play_tool->insert_callback[AVMEDIA_TYPE_AUDIO] = std::bind(&DriveWindow::convert_audio_frame, this, std::placeholders::_1, std::placeholders::_2);
+		play_tool->start_read_thread();
+		play_tool->start_decode_thread();
 	}
 
-    void DriveFullWindow::StartPlayer() noexcept
+    void DriveWindow::StartPlayer() noexcept
 	{
-		if (target == nullptr) return;
+		if (play_tool == nullptr) return;
 
-		target->clear(playing_thread);
+		play_tool->clear(playing_thread);
 		SDL_PauseAudioDevice(device_id, 0);
-        target->local_thread |= playing_thread;
-        target->ThrPlay = std::jthread([&](std::stop_token st)->void
+		play_tool->local_thread |= playing_thread;
+		play_tool->ThrPlay = std::jthread([&](std::stop_token st)->void
 			{
 				std::stop_callback scb(st, [this]()
 					{
-						this->target->local_thread &= ~FFmpegLayer::playing_thread;
-						std::cout << "exit player thread" << std::endl;
+						this->play_tool->local_thread &= ~FFmpegLayer::playing_thread;
+						std::osyncstream{ std::cout } << "exit player thread" << std::endl;
 					});
 
-				auto& frame = target->avframe_work[AVMEDIA_TYPE_VIDEO].first;
-				auto& audio_ptr = target->avframe_work[AVMEDIA_TYPE_AUDIO];
-				auto& secBaseVideo = target->secBaseTime[AVMEDIA_TYPE_VIDEO];
-				auto& secBaseAudio = target->secBaseTime[AVMEDIA_TYPE_AUDIO];
+				auto& frame = play_tool->avframe_work[AVMEDIA_TYPE_VIDEO].first;
+				auto& audio_ptr = play_tool->avframe_work[AVMEDIA_TYPE_AUDIO];
+				auto& secBaseVideo = play_tool->secBaseTime[AVMEDIA_TYPE_VIDEO];
+				auto& secBaseAudio = play_tool->secBaseTime[AVMEDIA_TYPE_AUDIO];
 
                 while (audio_ptr.first == nullptr) std::this_thread::sleep_for(1ms);
-
                 while (st.stop_requested() == false)
 				{
 
-                    while (!target->flush_frame(AVMEDIA_TYPE_VIDEO))
-                        if (target->local_thread & FFmpegLayer::playing_thread) std::this_thread::sleep_for(1ms);
+                    while (!play_tool->flush_frame(AVMEDIA_TYPE_VIDEO))
+                        if (play_tool->local_thread & FFmpegLayer::playing_thread) std::this_thread::sleep_for(1ms);
                         else break;
 
 					if (frame == nullptr) return;
 
-					if (isChangeSize == true)
+					if (isChangeSize == true || SDL_renderer == nullptr || SDL_texture == nullptr)
 					{
 						SDL_renderer.reset();
 						SDL_renderer = SDL_CreateRenderer(SDL_win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -111,11 +110,11 @@ namespace SDLLayer
 						isChangeSize = false;
 					}
 
-                    if(!(target->local_thread & FFmpegLayer::playing_thread))
+                    if(!(play_tool->local_thread & FFmpegLayer::playing_thread))
                     {
 						if (st.stop_requested() == true) return;
-                        target->wait_play_pause.release();
-						target->run_play_thread.acquire();
+						play_tool->wait_play_pause.release();
+						play_tool->run_play_thread.acquire();
                     }
 					int ret = 0;
 
@@ -150,18 +149,41 @@ namespace SDLLayer
 
                     while ((frame->pts * secBaseVideo) >= (audio_ptr.first->pts * secBaseAudio))
                     {
-                        if(target->FrameQueue[AVMEDIA_TYPE_VIDEO].full() && target->FrameQueue[AVMEDIA_TYPE_AUDIO].empty())
-                            target->flush_frame(AVMEDIA_TYPE_VIDEO);
-                        if(target->local_thread & FFmpegLayer::playing_thread) std::this_thread::sleep_for(1ms);
+                        if(play_tool->FrameQueue[AVMEDIA_TYPE_VIDEO].full() && play_tool->FrameQueue[AVMEDIA_TYPE_AUDIO].empty())
+							play_tool->flush_frame(AVMEDIA_TYPE_VIDEO);
+                        if(play_tool->local_thread & FFmpegLayer::playing_thread) std::this_thread::sleep_for(1ms);
                         else break;
                     }
                     SDL_RenderPresent(SDL_renderer);
 				}
             });
-		std::osyncstream{ std::cout } << "create player thread id: " << target->ThrPlay.get_id() << std::endl;
+		std::osyncstream{ std::cout } << "create player thread id: " << play_tool->ThrPlay.get_id() << std::endl;
 	}
 
-	void DriveFullWindow::convert_video_frame(AVFrame*& work, char*& buf) noexcept
+	void DriveWindow::ReSize(int width, int height) noexcept
+	{
+		int scr_width = width;
+		int scr_height = height;
+		int _width, _height, x, y;
+
+		_height = scr_height;
+		_width = lrint(height * aspect_ratio) & ~1;
+		if (_width > scr_width)
+		{
+			_width = scr_width;
+			_height = lrint(_width / aspect_ratio) & ~1;
+		}
+		x = (scr_width - _width) / 2;
+		y = (scr_height - _height) / 2;
+
+		rect.x = x;
+		rect.y = y;
+		rect.w = _width;
+		rect.h = _height;
+		isChangeSize = true;
+	}
+
+	void DriveWindow::convert_video_frame(AVFrame*& work, char*& buf) noexcept
 	{
 		if (work == nullptr) return;
 
@@ -171,7 +193,7 @@ namespace SDLLayer
 			if (format == map_video_format.end() || format->first == AV_PIX_FMT_NONE)
 			{
 				isNeedToChangeFrame = true;
-				target->init_sws(work);
+				play_tool->init_sws(work);
 				pixel_format = SDL_PIXELFORMAT_IYUV;
 			}
 			else
@@ -180,24 +202,24 @@ namespace SDLLayer
 				isNeedToChangeFrame = false;
 			}
 		}
-		if (isNeedToChangeFrame) target->sws_scale_420P(work);
+		if (isNeedToChangeFrame) play_tool->sws_scale_420P(work);
 
 	}
 
-    void DriveFullWindow::convert_audio_frame(AVFrame*& work, char*& buf) noexcept
+    void DriveWindow::convert_audio_frame(AVFrame*& work, char*& buf) noexcept
 	{
 		if (work == nullptr)return;
 		if (buf == nullptr)buf = new char[work->linesize[0]];
 		if (is_planner)
-			target->sample_planner_to_packed(work, reinterpret_cast<uint8_t**>(&buf), &work->linesize[0]);
+			play_tool->sample_planner_to_packed(work, reinterpret_cast<uint8_t**>(&buf), &work->linesize[0]);
 	}
 
-	void DriveFullWindow::KeyMouseCallEvent() noexcept
+	void DriveWindow::KeyMouseCallEvent() noexcept
 	{
 		SDL_Event windowEvent;
 
-		auto& secBaseVideo = target->secBaseTime[AVMEDIA_TYPE_VIDEO];
-		auto& secBaseAudio = target->secBaseTime[AVMEDIA_TYPE_AUDIO];
+		auto& secBaseVideo = play_tool->secBaseTime[AVMEDIA_TYPE_VIDEO];
+		auto& secBaseAudio = play_tool->secBaseTime[AVMEDIA_TYPE_AUDIO];
 
         while (true)
 		{
@@ -213,27 +235,25 @@ namespace SDLLayer
 					case SDLK_ESCAPE:
 						break;
 					case SDLK_SPACE:
-						if (target == nullptr) break;
-						if (target->local_thread & playing_thread)
-						{
+						if (play_tool == nullptr) break;
+						if (play_tool->local_thread & playing_thread){
 							SDL_PauseAudioDevice(device_id, 1);
-							target->stop(playing_thread);
+							play_tool->stop(playing_thread);
 						}
-						else
-						{
+						else{
 							SDL_PauseAudioDevice(device_id, 0);
-							target->run(playing_thread);
+							play_tool->run(playing_thread);
 						}
                         break;
 
 					case SDLK_LEFT:
 
-						target->seek_time(target->avframe_work[AVMEDIA_TYPE_AUDIO].first->pts * secBaseAudio - 5);
+						play_tool->seek_time(play_tool->avframe_work[AVMEDIA_TYPE_AUDIO].first->pts * secBaseAudio - 5);
 
 						break;
 					case SDLK_RIGHT:
 
-						target->seek_time(target->avframe_work[AVMEDIA_TYPE_AUDIO].first->pts * secBaseAudio + 5);
+						play_tool->seek_time(play_tool->avframe_work[AVMEDIA_TYPE_AUDIO].first->pts * secBaseAudio + 5);
 
 						break;
 
@@ -250,23 +270,23 @@ namespace SDLLayer
 		}
 	}
 
-    void SDLCALL DriveFullWindow::default_callback(void* userdata, Uint8* stream, int len)
+    void SDLCALL DriveWindow::default_callback(void* userdata, Uint8* stream, int len)
 	{
-		auto _this = static_cast<DriveFullWindow*>(userdata);
-		auto& audio_frame = _this->target->avframe_work[AVMEDIA_TYPE_AUDIO];
+		auto _this = static_cast<DriveWindow*>(userdata);
+		auto& audio_frame = _this->play_tool->avframe_work[AVMEDIA_TYPE_AUDIO];
 
 		//清空流
 		if (_this->audio_buflen == 0)
 		{
-			if (!_this->target->flush_frame(AVMEDIA_TYPE_AUDIO)) return;
+			if (!_this->play_tool->flush_frame(AVMEDIA_TYPE_AUDIO)) return;
 
-            if(!(_this->target->local_thread & playing_thread)) return;
+            if(!(_this->play_tool->local_thread & playing_thread)) return;
 
 			if (_this->is_planner)
-				_this->audio_buf = reinterpret_cast<uint8_t*>(audio_frame.second.get());
+				_this->audio_buffer = reinterpret_cast<uint8_t*>(audio_frame.second.get());
             else 
-				_this->audio_buf = audio_frame.first->data[0];
-			_this->audio_pos = _this->audio_buf;
+				_this->audio_buffer = audio_frame.first->data[0];
+			_this->audio_pos = _this->audio_buffer;
 			_this->audio_buflen = audio_frame.first->linesize[0];
 
 		}
@@ -280,17 +300,17 @@ namespace SDLLayer
 		return;
 	}
 
-    void DriveFullWindow::InitAudio(SDL_AudioCallback callback)
+    void DriveWindow::InitAudio(SDL_AudioCallback callback)
 	{
 		SDL_CloseAudioDevice(device_id);
-		auto& audio_ctx = target->decode_ctx[AVMEDIA_TYPE_AUDIO];
+		auto& audio_ctx = play_tool->decode_ctx[AVMEDIA_TYPE_AUDIO];
 		AVSampleFormat format = *audio_ctx->codec->sample_fmts;
 
 		if (SDL_Init(SDL_INIT_AUDIO))throw "SDL_init error";
 
 		if (av_sample_fmt_is_planar(format))
 		{
-			if (target->init_swr() != FFmpegLayer::SUCCESS) throw "init_swr() failed";
+			if (play_tool->init_swr() != FFmpegLayer::SUCCESS) throw "init_swr() failed";
 			is_planner = true;
 		}
         else is_planner = false;
@@ -312,15 +332,20 @@ namespace SDLLayer
 
 	}
 
-    void DriveFullWindow::InitVideo(void* win_handle,int width,int height)
+    void DriveWindow::InitVideo(void* win_handle,int width,int height)
 	{
         SDL_texture.reset(nullptr);
         SDL_renderer.reset(nullptr);
         SDL_win.reset(nullptr);
 
-		auto& video_ctx = target->decode_ctx[AVMEDIA_TYPE_VIDEO];
+		//抗锯齿
+		SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+
+		auto& video_ctx = play_tool->decode_ctx[AVMEDIA_TYPE_VIDEO];
 
 		if (SDL_Init(SDL_INIT_VIDEO)) throw "SDL_init error";
+
+		SDL_win.reset();
 
 		if(win_handle)
 			SDL_win =SDL_CreateWindowFrom(win_handle);
@@ -329,13 +354,8 @@ namespace SDLLayer
 
 		if (SDL_win == nullptr) throw "windows create error";
 
-		SDL_renderer = SDL_CreateRenderer(SDL_win, -1, SDL_RENDERER_PRESENTVSYNC);
-		if (SDL_renderer == nullptr)throw "Renderer create failed";
-
-		rect.w = width;
-		rect.h = height;
-
 		aspect_ratio = static_cast<float>(video_ctx->width) / video_ctx->height;
+		ReSize(width, height);
 	}
 }
 

@@ -35,8 +35,7 @@ private:
     void closeWindow();
 
     Ui::HoloMainWindow *ui;
-    FFmpegLayer::PlayTool ffmpeg_dirver;
-    SDLLayer::DriveFullWindow drivefullwindows;
+    SDLLayer::DriveWindow drivewindows;
     int timer_id;
 protected:
     void timerEvent(QTimerEvent * event) override;

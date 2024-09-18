@@ -39,7 +39,7 @@ constexpr const char str_StyleSheet_run[]="             \
 ";
 
 HoloMainWindow::HoloMainWindow(QWidget *parent)
-    : QMainWindow(parent), drivefullwindows(this->ffmpeg_dirver)
+    : QMainWindow(parent), drivewindows(new FFmpegLayer::PlayTool())
     , ui(new Ui::HoloMainWindow)
 {
     ui->setupUi(this);
@@ -63,31 +63,31 @@ HoloMainWindow::~HoloMainWindow()
 
 void HoloMainWindow::on_stop_play_clicked()
 {
-    if (this->drivefullwindows.target==nullptr || this->drivefullwindows.target->ThrPlay.joinable() == false) return;
-    if (this->drivefullwindows.target->local_thread & SDLLayer::playing_thread){
-        SDL_PauseAudioDevice(this->drivefullwindows.device_id, 1);
-        this->drivefullwindows.target->stop(SDLLayer::playing_thread);
+    if (this->drivewindows.play_tool ==nullptr || this->drivewindows.play_tool->ThrPlay.joinable() == false) return;
+    if (this->drivewindows.play_tool->local_thread & SDLLayer::playing_thread){
+        SDL_PauseAudioDevice(this->drivewindows.device_id, 1);
+        this->drivewindows.play_tool->stop(SDLLayer::playing_thread);
     }
-    else if(this->drivefullwindows.target->ThrPlay.joinable()){
-        SDL_PauseAudioDevice(this->drivefullwindows.device_id, 0);
-        this->drivefullwindows.target->run(SDLLayer::playing_thread);
+    else if(this->drivewindows.play_tool->ThrPlay.joinable()){
+        SDL_PauseAudioDevice(this->drivewindows.device_id, 0);
+        this->drivewindows.play_tool->run(SDLLayer::playing_thread);
     }
     else 
-        this->drivefullwindows.StartPlayer();
+        this->drivewindows.StartPlayer();
 }
 
 void HoloMainWindow::timerEvent(QTimerEvent * event)
 {
-    if(this->drivefullwindows.target==nullptr) return;
+    if(this->drivewindows.play_tool ==nullptr) return;
 
-    auto& audio_ptr = this->drivefullwindows.target->avframe_work[AVMEDIA_TYPE_AUDIO].first;
+    auto& audio_ptr = this->drivewindows.play_tool->avframe_work[AVMEDIA_TYPE_AUDIO].first;
     if(audio_ptr==nullptr)return;
     if(!ui->time_slider->isSliderDown()){
-        int sec=audio_ptr->pts * this->drivefullwindows.target->secBaseTime[AVMEDIA_TYPE_AUDIO];
+        int sec=audio_ptr->pts * this->drivewindows.play_tool->secBaseTime[AVMEDIA_TYPE_AUDIO];
         ui->timestamp->setText(QString::asprintf("%02d:%02d", sec / 60, sec % 60));
         ui->time_slider->setValue(sec);
     }
-    if(this->drivefullwindows.target->local_thread & FFmpegLayer::playing_thread)
+    if(this->drivewindows.play_tool->local_thread & FFmpegLayer::playing_thread)
         ui->stop_play->setStyleSheet(str_StyleSheet_run);
     else
         ui->stop_play->setStyleSheet(str_StyleSheet_stop);
@@ -95,45 +95,27 @@ void HoloMainWindow::timerEvent(QTimerEvent * event)
 
 void HoloMainWindow::resizeEvent(QResizeEvent* event)
 {
-    int scr_width = this->ui->openGLWidget->width();
-    int scr_height = this->ui->openGLWidget->height();
-    int width, height, x, y;
-
-    height = scr_height;
-    width = lrint(height * this->drivefullwindows.aspect_ratio) & ~1;
-    if (width > scr_width)
-    {
-        width = scr_width;
-        height = lrint(width / this->drivefullwindows.aspect_ratio) & ~1;
-    }
-    x = (scr_width - width) / 2;
-    y = (scr_height - height) / 2;
-
-    this->drivefullwindows.rect.x = x;
-    this->drivefullwindows.rect.y = y;
-    this->drivefullwindows.rect.w = width;
-    this->drivefullwindows.rect.h = height;
-    this->drivefullwindows.isChangeSize = true;
+    this->drivewindows.ReSize(this->ui->openGLWidget->width(), this->ui->openGLWidget->height());
 }
 
 bool temp_isrun = false;
 void HoloMainWindow::on_time_slider_sliderReleased()
 {
-    if(this->drivefullwindows.target==nullptr) return;
+    if(this->drivewindows.play_tool==nullptr) return;
 
-    temp_isrun = this->drivefullwindows.target->local_thread & FFmpegLayer::playing_thread;
-    SDL_PauseAudioDevice(this->drivefullwindows.device_id, 1);
-    this->drivefullwindows.target->stop(FFmpegLayer::playing_thread);
-    this->drivefullwindows.target->seek_time(ui->time_slider->value());
+    temp_isrun = this->drivewindows.play_tool->local_thread & FFmpegLayer::playing_thread;
+    SDL_PauseAudioDevice(this->drivewindows.device_id, 1);
+    this->drivewindows.play_tool->stop(FFmpegLayer::playing_thread);
+    this->drivewindows.play_tool->seek_time(ui->time_slider->value());
 
-    if(!this->drivefullwindows.target->ThrPlay.joinable()) this->drivefullwindows.StartPlayer();
+    if(!this->drivewindows.play_tool->ThrPlay.joinable()) this->drivewindows.StartPlayer();
     if(temp_isrun)
     on_stop_play_clicked();
 }
 
 void HoloMainWindow::on_time_slider_sliderMoved(int position)
 {
-    if(this->drivefullwindows.target==nullptr) return;
+    if(this->drivewindows.play_tool ==nullptr) return;
     ui->timestamp->setText(QString::asprintf("%02d:%02d", position/60,position%60));
 }
 
@@ -141,12 +123,11 @@ void HoloMainWindow::StartOpenFile()
 {
     QString filepath = QFileDialog::getOpenFileName(this, tr("打开文件"), "./", tr("video files(*.mp4 *.mkv *.flv);;All files(*.*)"));
     if (filepath.isEmpty() || filepath == "") return;
-    if (ffmpeg_dirver.open(filepath.toStdString().c_str()) != FFmpegLayer::SUCCESS) return;
+    if (this->drivewindows.play_tool->open(filepath.toStdString().c_str()) != FFmpegLayer::SUCCESS) return;
 
-    this->drivefullwindows.InitPlayer(this->ui->openGLWidget->width(), this->ui->openGLWidget->height(),reinterpret_cast<void*>(this->ui->openGLWidget->winId()));
-
-    this->drivefullwindows.StartPlayer();
-    int sec = this->drivefullwindows.target->avfctx_input->duration / AV_TIME_BASE;
+    this->drivewindows.InitPlayer(this->ui->openGLWidget->width(), this->ui->openGLWidget->height(),reinterpret_cast<void*>(this->ui->openGLWidget->winId()));
+    this->drivewindows.StartPlayer();
+    int sec = this->drivewindows.play_tool->avfctx_input->duration / AV_TIME_BASE;
     ui->total_time->setText(QString::number(sec / 60) + ":" + QString::number(sec % 60));
     ui->time_slider->setSliderPosition(0);
     ui->time_slider->setMaximum(sec);
@@ -166,6 +147,6 @@ void HoloMainWindow::closeWindow()
 }
 void HoloMainWindow::on_volume_slider_valueChanged(int value)
 {
-    this->drivefullwindows.volume = value;
+    this->drivewindows.volume = value;
 }
 

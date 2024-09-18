@@ -23,17 +23,20 @@ namespace SDLLayer
 	//转化AVPixelFormat为SDL_PixelFormatEnum格式
 	extern const std::map<AVPixelFormat, SDL_PixelFormatEnum> map_video_format;
 
-	class DriveFullWindow
+	class DriveWindow
 	{
 	public:
-		PlayTool* target = nullptr;
+		//ffmpeg层
+		std::unique_ptr<PlayTool> play_tool;
+		//是否需要重新设置窗口大小
 		bool isChangeSize = false;
 		//----------------------------------------------------AUDIO------------------------------------------------------------------
 	 private:
 		//音频缓存指针
-		 Uint8* audio_buf = nullptr;
+		 uint8_t* audio_buffer = nullptr;
 		//音频工作指向
 		Uint8* audio_pos = nullptr;
+
 		//采样到数据大小 =（采样个数) nb_sample * (采样点大小) bit_size
 		int audio_buflen = 0;
 		//原始帧是否为planner格式
@@ -42,11 +45,12 @@ namespace SDLLayer
 		SDL_AudioSpec sdl_audio{ 0 };
 	public:
 		//音量大小值
-		char volume= static_cast<char>(SDL_MIX_MAXVOLUME);
+		unsigned char volume= static_cast<unsigned char>(SDL_MIX_MAXVOLUME);
 		//音频识别符
 		SDL_AudioDeviceID device_id = 0;
 		//窗口信息
 		SDL_Rect rect{ 0 };
+		//视频宽高比
 		float aspect_ratio;
 		//-----------------------------------------------------VIDEO------------------------------------------------------------------
 	//private:
@@ -62,9 +66,9 @@ namespace SDLLayer
 		bool isNeedToChangeFrame = false;
 		//----------------------------------------------------------------------------------------------------------------------------
 	public:
-		DriveFullWindow(FFmpegLayer::PlayTool& rely);
+		DriveWindow(FFmpegLayer::PlayTool* rely);
 
-		~DriveFullWindow();
+		~DriveWindow();
 
 		//处理画面帧回调封装
 		void convert_video_frame(AVFrame*& work, char*& buf) noexcept;
@@ -78,8 +82,6 @@ namespace SDLLayer
 		void InitAudio(SDL_AudioCallback callback);
 		//初始化视频环境
 		void InitVideo(void* windows, int width, int height);
-		//初始化帧转化器
-
 
 		//默认音頻回调函数
 		static void SDLCALL default_callback(void* userdata, Uint8* stream, int len);
@@ -88,5 +90,7 @@ namespace SDLLayer
 		void InitPlayer(int width, int height, void* win_handle = nullptr, SDL_AudioCallback callback = default_callback);
 		//开始播放
 		void StartPlayer() noexcept;
+		//重绘窗口大小
+		void ReSize(int width, int height) noexcept;
 	};
 };
