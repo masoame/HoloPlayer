@@ -63,17 +63,7 @@ HoloMainWindow::~HoloMainWindow()
 
 void HoloMainWindow::on_stop_play_clicked()
 {
-    if (this->drivewindows.play_tool ==nullptr || this->drivewindows.play_tool->ThrPlay.joinable() == false) return;
-    if (this->drivewindows.play_tool->local_thread & SDLLayer::playing_thread){
-        SDL_PauseAudioDevice(this->drivewindows.device_id, 1);
-        this->drivewindows.play_tool->stop(SDLLayer::playing_thread);
-    }
-    else if(this->drivewindows.play_tool->ThrPlay.joinable()){
-        SDL_PauseAudioDevice(this->drivewindows.device_id, 0);
-        this->drivewindows.play_tool->run(SDLLayer::playing_thread);
-    }
-    else 
-        this->drivewindows.StartPlayer();
+    this->drivewindows.togglePause();
 }
 
 void HoloMainWindow::timerEvent(QTimerEvent * event)
@@ -82,12 +72,12 @@ void HoloMainWindow::timerEvent(QTimerEvent * event)
 
     auto& audio_ptr = this->drivewindows.play_tool->avframe_work[AVMEDIA_TYPE_AUDIO].first;
     if(audio_ptr==nullptr)return;
-    if(!ui->time_slider->isSliderDown()){
+    if(ui->time_slider->isSliderDown() == false){
         int sec=audio_ptr->pts * this->drivewindows.play_tool->secBaseTime[AVMEDIA_TYPE_AUDIO];
         ui->timestamp->setText(QString::asprintf("%02d:%02d", sec / 60, sec % 60));
         ui->time_slider->setValue(sec);
     }
-    if(this->drivewindows.play_tool->local_thread & FFmpegLayer::playing_thread)
+    if(this->drivewindows.is_pause == false)
         ui->stop_play->setStyleSheet(str_StyleSheet_run);
     else
         ui->stop_play->setStyleSheet(str_StyleSheet_stop);
@@ -98,19 +88,10 @@ void HoloMainWindow::resizeEvent(QResizeEvent* event)
     this->drivewindows.ReSize(this->ui->openGLWidget->width(), this->ui->openGLWidget->height());
 }
 
-bool temp_isrun = false;
+
 void HoloMainWindow::on_time_slider_sliderReleased()
 {
-    if(this->drivewindows.play_tool==nullptr) return;
-
-    temp_isrun = this->drivewindows.play_tool->local_thread & FFmpegLayer::playing_thread;
-    SDL_PauseAudioDevice(this->drivewindows.device_id, 1);
-    this->drivewindows.play_tool->stop(FFmpegLayer::playing_thread);
     this->drivewindows.play_tool->seek_time(ui->time_slider->value());
-
-    if(!this->drivewindows.play_tool->ThrPlay.joinable()) this->drivewindows.StartPlayer();
-    if(temp_isrun)
-    on_stop_play_clicked();
 }
 
 void HoloMainWindow::on_time_slider_sliderMoved(int position)
@@ -123,6 +104,7 @@ void HoloMainWindow::StartOpenFile()
 {
     QString filepath = QFileDialog::getOpenFileName(this, tr("打开文件"), "./", tr("video files(*.mp4 *.mkv *.flv);;All files(*.*)"));
     if (filepath.isEmpty() || filepath == "") return;
+
     if (this->drivewindows.play_tool->open(filepath.toStdString().c_str()) != FFmpegLayer::SUCCESS) return;
 
     this->drivewindows.InitPlayer(this->ui->openGLWidget->width(), this->ui->openGLWidget->height(),reinterpret_cast<void*>(this->ui->openGLWidget->winId()));

@@ -16,6 +16,7 @@
 #include<condition_variable>
 #include<future>
 #include<assert.h>
+#include<optional>
 
 extern void close(int fd);
 
@@ -44,7 +45,7 @@ namespace common
 
 		AutoHandle() noexcept {}
 		AutoHandle(AutoHandle& _handle) = delete;
-		explicit AutoHandle(AutoHandle&& _handle) noexcept : _ptr(_handle.release()) {}
+		AutoHandle(AutoHandle&& _handle) noexcept : _ptr(_handle.release()) {}
 		AutoHandle(_Type* ptr) noexcept : _ptr(ptr) {}
 
 		AutoHandle& operator=(_Type* ptr) noexcept { _ptr.reset(ptr); return *this; }
@@ -240,72 +241,92 @@ namespace common
 		}
 
 		template<typename... Args>
-		_Type& emplace_back(Args&&... args)
-		{
-			std::unique_lock<std::mutex> lock(_mtx);
-			_cv_could_push.wait(lock, [this] { return (_queue.size() < this->_max_size) || _is_closed; });
-			if (_is_closed) throw std::runtime_error("enqueue on closed BoundedQueue");
-			auto& ret = _queue.emplace_back(std::forward<Args>(args)...);
-			_cv_could_pop.notify_one();
-			return ret;
-		}
-
-		void push_back(_Type&& value)
+		void emplace(Args&&... args) noexcept
 		{
 			std::unique_lock lock(_mtx);
 			_cv_could_push.wait(lock, [this] { return (_queue.size() < this->_max_size) || _is_closed; });
-			if (_is_closed) throw std::runtime_error("enqueue on closed BoundedQueue");
+			if (_is_closed) return;
+			_queue.emplace_back(std::forward<Args>(args)...);
+			_cv_could_pop.notify_one();
+			return;
+		}
+
+		void push(_Type&& value) noexcept
+		{
+			std::unique_lock lock(_mtx);
+			_cv_could_push.wait(lock, [this] { return (_queue.size() < this->_max_size) || _is_closed; });
+			if (_is_closed) return;
 			_queue.push_back(std::move(value));
 			_cv_could_pop.notify_one();
 		}
 
-		void push_back(const _Type& value)
+		void push(const _Type& value) noexcept
 		{
 			std::unique_lock lock(_mtx);
 			_cv_could_push.wait(lock, [this] { return (_queue.size() < this->_max_size) || _is_closed; });
-			if (_is_closed) throw std::runtime_error("enqueue on closed BoundedQueue");
+			if (_is_closed) return;
 			_queue.push_back(value);
 			_cv_could_pop.notify_one();
 		}
 
-		_Type& front()
+		std::optional<_Type> pop() noexcept
 		{
-			std::unique_lock<std::mutex> lock(_mtx);
+			std::unique_lock lock(_mtx);
 			_cv_could_pop.wait(lock, [this] { return (this->_queue.empty() == false) || _is_closed; });
-			if (_is_closed) throw std::runtime_error("dequeue on closed BoundedQueue");
-			return _queue.front();
-		}
-
-		//通过检测_Type是否是可移动的，来确定是否使用移动构造函数
-		_Type pop()
-		{
-			std::unique_lock<std::mutex> lock(_mtx);
-			_cv_could_pop.wait(lock, [this] { return (this->_queue.empty() == false) || _is_closed; });
-			if (_is_closed) throw std::runtime_error("dequeue on closed BoundedQueue");
+			if (_is_closed) return std::nullopt;
 			_Type _ret{ std::move(_queue.front()) };
 			_queue.pop_front();
 			_cv_could_push.notify_one();
 			return _ret;
 		}
 
-		size_t size() const noexcept
+		template <class _Rep, class _Period>
+		std::optional<_Type> pop_for(const std::chrono::duration<_Rep, _Period>& _Rel_time) noexcept
 		{
-			std::unique_lock<std::mutex> lock(_mtx);
+			std::unique_lock lock(_mtx);
+			bool cv_status = _cv_could_pop.wait_for(lock, _Rel_time, [this] { return (this->_queue.empty() == false) || _is_closed; });
+			if (_is_closed || !cv_status) return std::nullopt;
+			_Type _ret{ std::move(_queue.front()) };
+			_queue.pop_front();
+			_cv_could_push.notify_one();
+			return _ret;
+		}
+
+		inline size_t size() const noexcept
+		{
 			return _queue.size();
 		}
 
-		bool empty() const noexcept
+		inline bool empty() const noexcept
 		{
-			std::unique_lock<std::mutex> lock(_mtx);
 			return _queue.empty();
 		}
 
+		inline bool full() const noexcept
+		{
+			return _queue.size() >= _max_size;
+		}
+
+		inline void lock() noexcept
+		{
+			_mtx.lock();
+		}
+
+		inline void unlock() noexcept
+		{
+			_mtx.unlock();
+		}
+
+		void clear() noexcept
+		{
+			_queue.clear();
+		}
+		bool _is_closed = true;
+		std::condition_variable _cv_could_push, _cv_could_pop;
 	private:
 		std::deque<_Type> _queue;
 		const size_t _max_size;
 		std::mutex _mtx;
-		std::condition_variable _cv_could_push, _cv_could_pop;
-		bool _is_closed = true;
 	};
 
 	/*

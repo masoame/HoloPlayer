@@ -25,8 +25,7 @@ namespace FFmpegLayer
 
     RESULT PlayTool::open(const char* srcUrl, const char* dstUrl, unsigned char type)
     {
-        this->clear();
-
+        this->close();
         if (type & in)
         {
             avfctx_input = avformat_alloc_context();
@@ -113,6 +112,17 @@ namespace FFmpegLayer
         return SUCCESS;
     }
 
+    inline void PlayTool::insert_queue(AVMediaType index, AutoAVFramePtr&& avf) noexcept
+    {
+        char* userdata = nullptr;
+        if (insert_callback[index] != nullptr)
+            insert_callback[index](avf, userdata);
+
+        FrameQueue[index].emplace(std::move(avf), userdata);
+
+        avf = av_frame_alloc();
+    }
+
     RESULT PlayTool::sws_scale_420P(AVFrame*& data)
     {
 
@@ -126,33 +136,13 @@ namespace FFmpegLayer
         return SUCCESS;
     }
 
-    inline void PlayTool::insert_queue(AVMediaType index, AutoAVFramePtr&& avf) noexcept
-    {
-        char* userdata = nullptr;
-        if (insert_callback[index] != nullptr)
-            insert_callback[index](avf, userdata);
-
-        while (!FrameQueue[index].try_emplace(std::move(avf),userdata) && (local_thread & decode_thread))
-            std::this_thread::sleep_for(1ms);
-
-        avf = av_frame_alloc();
-    }
-
-    bool PlayTool::flush_frame(AVMediaType index) noexcept
-    {
-
-        std::unique_ptr<framedata_type> temp = nullptr;
-        if (!(temp = FrameQueue[index].try_pop())) return false;
-
-        avframe_work[index].first.reset(temp->first.release());
-        avframe_work[index].second.reset(temp->second.release());
-        return true;
-    }
-
     void PlayTool::seek_time(int64_t sec) noexcept
     {
-        stop(read_thread);
-        stop(decode_thread);
+        std::lock_guard lock(decode_mutex);
+
+        PacketQueue.lock();
+        FrameQueue[AVMEDIA_TYPE_AUDIO].lock();
+        FrameQueue[AVMEDIA_TYPE_VIDEO].lock();
 
         PacketQueue.clear();
         FrameQueue[AVMEDIA_TYPE_AUDIO].clear();
@@ -161,137 +151,80 @@ namespace FFmpegLayer
         avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_VIDEO]);
         avcodec_flush_buffers(decode_ctx[AVMEDIA_TYPE_AUDIO]);
 
-        if (avformat_seek_file(avfctx_input, -1, INT64_MIN, sec * AV_TIME_BASE, sec * AV_TIME_BASE, AVSEEK_FLAG_BACKWARD) < 0)
-        {
-            if (!ThrRead.joinable()) start_read_thread();
-            else run(read_thread);
-            if (!ThrDecode.joinable()) start_decode_thread();
-            else run(decode_thread);
-            return;
+        if (avformat_seek_file(avfctx_input, -1, INT64_MIN, sec * AV_TIME_BASE, sec * AV_TIME_BASE, AVSEEK_FLAG_BACKWARD) < 0) {
+            std::osyncstream{ std::cout } << "seek failed" << std::endl;
         }
-        if (!ThrRead.joinable()) start_read_thread();
-        else run(read_thread);
+        
+        this->avframe_work[AVMEDIA_TYPE_VIDEO].first->pts = 0;
 
-        if (!ThrDecode.joinable()) start_decode_thread();
-        else run(decode_thread);
+        PacketQueue.unlock();
+        FrameQueue[AVMEDIA_TYPE_AUDIO].unlock();
+        FrameQueue[AVMEDIA_TYPE_VIDEO].unlock();
 
-        while (!flush_frame(AVMEDIA_TYPE_AUDIO)) std::this_thread::sleep_for(1ms);
+        PacketQueue._cv_could_push.notify_one();
+        FrameQueue[AVMEDIA_TYPE_AUDIO]._cv_could_push.notify_one();
+        FrameQueue[AVMEDIA_TYPE_VIDEO]._cv_could_push.notify_one();
+
     }
 
-    void PlayTool::stop(const char type) noexcept
+    void PlayTool::close() noexcept
     {
-        if (ThrRead.joinable() && (type & read_thread) && (local_thread & read_thread))
-        {
-            local_thread &= ~read_thread;
-            wait_read_pause.acquire();
-        }
-        if (ThrRead.joinable() && (type & decode_thread) && (local_thread & decode_thread))
-        {
-            local_thread &= ~decode_thread;
-            wait_decode_pause.acquire();
-        }
-        if (ThrPlay.joinable() && (type & playing_thread) && (local_thread & playing_thread))
-        {
-            local_thread &= ~playing_thread;
-            wait_play_pause.acquire();
-        }
-    }
-    void PlayTool::run(const char type) noexcept
-    {
-        if (ThrRead.joinable() && (type & read_thread) && !(local_thread & read_thread))
-        {
-            local_thread |= read_thread;
-            run_read_thread.release();
-        }
-        if (ThrRead.joinable() && (type & decode_thread) && !(local_thread & decode_thread))
-        {
-            local_thread |= decode_thread;
-            run_decode_thread.release();
-        }
-        if (ThrPlay.joinable() && (type & playing_thread) && !(local_thread & playing_thread))
-        {
-            local_thread |= playing_thread;
-            run_play_thread.release();
-        }
+        if (ThrRead.joinable()) ThrRead.request_stop();
+        if (ThrDecode.joinable()) ThrDecode.request_stop();
+        if (ThrPlay.joinable()) ThrPlay.request_stop();
+
+        PacketQueue._is_closed = true;
+        FrameQueue[AVMEDIA_TYPE_AUDIO]._is_closed = true;
+        FrameQueue[AVMEDIA_TYPE_VIDEO]._is_closed = true;
+
+        PacketQueue._cv_could_push.notify_all();
+        PacketQueue._cv_could_pop.notify_all();
+        FrameQueue[AVMEDIA_TYPE_AUDIO]._cv_could_push.notify_all();
+        FrameQueue[AVMEDIA_TYPE_AUDIO]._cv_could_pop.notify_all();
+        FrameQueue[AVMEDIA_TYPE_VIDEO]._cv_could_push.notify_all();
+        FrameQueue[AVMEDIA_TYPE_VIDEO]._cv_could_pop.notify_all();
+
+        if (ThrRead.joinable()) ThrRead.join();
+        if (ThrDecode.joinable()) ThrDecode.join();
+        if (ThrPlay.joinable()) ThrPlay.join();
+
+        PacketQueue._is_closed = false;
+        FrameQueue[AVMEDIA_TYPE_AUDIO]._is_closed = false;
+        FrameQueue[AVMEDIA_TYPE_VIDEO]._is_closed = false;
     }
 
-    void PlayTool::clear(const char type) noexcept
-    {
-        if (ThrPlay.joinable() && type & playing_thread)
-        {
-            ThrPlay.request_stop();
-            local_thread &= ~playing_thread;
-            if (ThrPlay.joinable())ThrPlay.join();
-        }
-        if (ThrDecode.joinable() && type & decode_thread)
-        {
-            ThrDecode.request_stop();
-            local_thread &= ~decode_thread;
-            if (ThrDecode.joinable())ThrDecode.join();
-        }
-        if (ThrRead.joinable() && type & read_thread)
-        {
-            ThrRead.request_stop();
-            local_thread &= ~read_thread;
-            if (ThrRead.joinable())ThrRead.join();
-        }
-    }
-
-    void PlayTool::clear() noexcept
-    {
-        clear(read_thread | decode_thread | playing_thread);
-
-        decode_ctx[AVMEDIA_TYPE_AUDIO].reset(nullptr);
-        decode_ctx[AVMEDIA_TYPE_VIDEO].reset(nullptr);
-        avfctx_input.reset(nullptr);
-
-        PacketQueue.clear();
-        FrameQueue[AVMEDIA_TYPE_AUDIO].clear();
-        FrameQueue[AVMEDIA_TYPE_VIDEO].clear();
-
-        for (auto& temp : AVStreamIndexToType)
-        {
-            temp = AVMEDIA_TYPE_UNKNOWN;
-        }
-        for (auto& temp : AVTypeToStreamIndex)
-        {
-            temp = -1;
-        }
-    }
 
     RESULT PlayTool::start_read_thread() noexcept
     {
-        local_thread |= read_thread;
-
         ThrRead = std::jthread([this](std::stop_token st)->void
             {
                 std::stop_callback end_read_callback(st, [this]()->void {
-                    this->local_thread &= ~read_thread;
-                    this->PacketQueue.try_push(nullptr);
                     std::osyncstream{ std::cout } << "success exit read thread"  << std::endl;
                 });
+
+#if _DEBUG
+                //std::once_flag _once_flag;
+                ////线程结束时，打印使用RAII
+                //std::unique_ptr<void()> a([] {
+
+                //    });
+#endif
+
 
                 int err = AVERROR(EAGAIN);
                 while (st.stop_requested() == false)
                 {
-                    if ((local_thread & read_thread) == false)
-                    {
-                        if (st.stop_requested() == true) return;
-                        wait_read_pause.release();
-                        run_read_thread.acquire();
-                    }
+
                     AutoAVPacketPtr avp(av_packet_alloc());
-                    err = av_read_frame(avfctx_input, avp);
-                    if ((err < 0) || (err == AVERROR_EOF))
                     {
-                        std::this_thread::sleep_for(1ms);
-                        continue;
+                        std::unique_lock lock(this->decode_mutex);
+                        err = av_read_frame(avfctx_input, avp);
+                        if ((err < 0) || (err == AVERROR_EOF)) {
+                            std::this_thread::sleep_for(1ms);
+                            continue;
+                        }
                     }
-                    while (!PacketQueue.try_push(std::move(avp)))
-                    {
-                        if ((local_thread & read_thread)==false) break;
-                        else std::this_thread::sleep_for(1ms);;
-                    }
+                    PacketQueue.push(std::move(avp));
                 }
             });
         std::osyncstream{ std::cout } << "create read thread id: " << ThrRead.get_id() << std::endl;
@@ -300,47 +233,46 @@ namespace FFmpegLayer
 
     RESULT PlayTool::start_decode_thread() noexcept
     {
-        local_thread |= decode_thread;
         ThrDecode = std::jthread([&](std::stop_token st)->void
             {
                std::stop_callback end_read_callback(st, [this]()->void {
-                   this->local_thread &= ~decode_thread;
-                   this->insert_queue(AVMEDIA_TYPE_VIDEO, nullptr);
-                    std::osyncstream{ std::cout } << "success exit decode thread" << std::endl;
+                   std::osyncstream{ std::cout } << "success exit decode thread" << std::endl;
                });
 
                 int err = AVERROR(EAGAIN);
                 AutoAVFramePtr avf = av_frame_alloc();
-                AutoAVPacketPtr avp;
 
                 while (st.stop_requested() == false)
                 {
-                    if (!(local_thread & decode_thread))
-                    {
-                        if (st.stop_requested() == true) return;
-                        wait_decode_pause.release();
-                        run_decode_thread.acquire();
+                    auto _avp_optioal = PacketQueue.pop();
+
+                    if (_avp_optioal.has_value() == false) { 
+                        std::this_thread::sleep_for(1ms);
+                        continue; 
                     }
+                    auto& avp = _avp_optioal.value();
 
-                    while ((avp = PacketQueue.try_pop()) == nullptr)
-                        if (local_thread & decode_thread) std::this_thread::sleep_for(1ms);
-                        else break;
-
-                    if (avp == nullptr)continue;
+                    if (avp == nullptr) {
+                        std::this_thread::sleep_for(1ms);
+                        continue;
+                    }
 
                     AVMediaType index = AVStreamIndexToType[avp->stream_index];
                     if (index == AVMEDIA_TYPE_VIDEO || index == AVMEDIA_TYPE_AUDIO)
                     {
-                        while ((err = avcodec_send_packet(decode_ctx[index], avp)) == AVERROR(EAGAIN))
-                            if (local_thread & decode_thread) std::this_thread::sleep_for(1ms);
-                            else continue;
+                        {
+                            std::unique_lock lock(this->decode_mutex);
+                            while ((err = avcodec_send_packet(decode_ctx[index], avp)) == AVERROR(EAGAIN))
+                                std::this_thread::sleep_for(1ms);
+                        }
 
-                        while (true)
+
+                        while (st.stop_requested() == false)
                         {
                             err = avcodec_receive_frame(decode_ctx[index], avf);
-                            if (err == 0) insert_queue(index, std::move(avf));
+                            if (err == 0)insert_queue(index,std::move(avf));
                             else if (err == AVERROR(EAGAIN)) break;
-                            else if (err == AVERROR_EOF) return;
+                            else if (err == AVERROR_EOF) continue;
                             else return;
                         }
                     }

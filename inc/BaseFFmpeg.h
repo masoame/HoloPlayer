@@ -55,14 +55,6 @@ namespace FFmpegLayer
 		audio = 0x8
 	};
 
-	//线程类型
-	enum thread_type : char
-	{
-		playing_thread = 0x01,
-		read_thread = 0x02,
-		decode_thread = 0x04,
-	};
-
 	//输入或输出帧格式
 	typedef struct MediaType
 	{
@@ -78,9 +70,8 @@ namespace FFmpegLayer
 	class PlayTool
 	{
 	public:
-
 		explicit PlayTool() {};
-		~PlayTool() { clear(); };
+		~PlayTool() { close(); };
 
 		//打开流
         RESULT open(const char* srcUrl, const char* dstUrl = nullptr, unsigned char type = in | video | audio);
@@ -106,34 +97,26 @@ namespace FFmpegLayer
 		//音视频拉流解码线程
 		RESULT start_pull_steam_thread() noexcept;
 
-		//插入队列
 		void insert_queue(AVMediaType index, AutoAVFramePtr&& avf) noexcept;
-		//从队列中取出并刷新工作指针的指向
-		bool flush_frame(AVMediaType index) noexcept;
+
 		//定位到对应的时间
 		void seek_time(int64_t usec)noexcept;
-		//暂停线程
-		void stop(const char type) noexcept;
-		//恢复线程
-		void run(const char type) noexcept;
-		//结束线程
-		void clear(const char type) noexcept;
-		//关闭所有相关功能
-		void clear() noexcept;
 
+		void close()noexcept;
 	public:
-		
-		//视频帧,音频帧，字幕帧队列[AVMediaType]
-		::common::circular_queue<std::pair<AutoAVFramePtr, std::unique_ptr<char[]>>> FrameQueue[3]{ 3,4,1 };
-		//读取到包管理队列
-		::common::circular_queue<AVPacket, ::common::Functor<av_packet_free>> PacketQueue{ 7 };
 
-		//本地线程状态
-		uint8_t local_thread = 0;
+		::common::bounded_queue<std::pair<AutoAVFramePtr, std::unique_ptr<char[]>>> FrameQueue[3]{ 12,60,1 };
+
+		::common::bounded_queue<AutoAVPacketPtr> PacketQueue{ 10 };
+
+
 		//输入输出格式指针
 		AutoAVFormatContextPtr avfctx_input, avfctx_output;
+
 		//解码上下文指针
 		AutoAVCodecContextPtr decode_ctx[3];
+		std::mutex decode_mutex;
+
 		//编码上下文指针
 		AutoAVCodecContextPtr encode_ctx[3];
 
@@ -159,18 +142,13 @@ namespace FFmpegLayer
 
 		//读取Packet线程
 		std::jthread ThrRead;
-		std::binary_semaphore wait_read_pause{ 0 };
-		std::binary_semaphore run_read_thread{ 0 };
 
 		//解码Packet线程
 		std::jthread ThrDecode;
-		std::binary_semaphore wait_decode_pause{ 0 };
-		std::binary_semaphore run_decode_thread{ 0 };
 
 		// 播放线程
 		std::jthread ThrPlay;
-		std::binary_semaphore wait_play_pause{ 0 };
-		std::binary_semaphore run_play_thread{ 0 };
+
 	};
 }
 

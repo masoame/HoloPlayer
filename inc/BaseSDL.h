@@ -48,6 +48,8 @@ namespace SDLLayer
 		unsigned char volume= static_cast<unsigned char>(SDL_MIX_MAXVOLUME);
 		//音频识别符
 		SDL_AudioDeviceID device_id = 0;
+		//音频播放状态
+		bool is_pause = false;
 		//窗口信息
 		SDL_Rect rect{ 0 };
 		//视频宽高比
@@ -86,11 +88,18 @@ namespace SDLLayer
 		//默认音頻回调函数
 		static void SDLCALL default_callback(void* userdata, Uint8* stream, int len);
 
+	public:
 		//初始化播放环境
 		void InitPlayer(int width, int height, void* win_handle = nullptr, SDL_AudioCallback callback = default_callback);
 		//开始播放
 		void StartPlayer() noexcept;
 		//重绘窗口大小
 		void ReSize(int width, int height) noexcept;
+		//暂停播放
+		void PausePlayer() noexcept;
+		//恢复播放
+		void ResumePlayer() noexcept;
+		//触发暂停或播放
+		void togglePause() noexcept;
 	};
 };
