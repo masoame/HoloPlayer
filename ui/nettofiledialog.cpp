@@ -22,6 +22,18 @@ void NetToFileDialog::on_saveFileBtn_clicked()
     QString filepath = QFileDialog::getExistingDirectory(this, tr("请选择保存地址"), tr("./"));
     if (filepath.isEmpty() || filepath == "") return;
     this->ui->pathEdit->setText(filepath);
+}
+
+void NetToFileDialog::on_btn_download_clicked()
+{
+    const auto num = ui->listWidget->count();
+    for (int i = 0; i != num; i++)
+    {
+        auto _item = qobject_cast<QCheckBox*>(ui->listWidget->itemWidget(ui->listWidget->item(i)));
+        if (_item != nullptr && _item->isChecked()) {
+
+        }
+    }
 
 }
 
@@ -49,22 +61,20 @@ void NetToFileDialog::on_checkUrlBtn_clicked()
     code = this->_userdata.RequestSoure();
     if (code != CURLE_OK) return;
 
-    auto results = ParseJson::ParseBilibili(_userdata.buffer.data());
+    auto results = ParseJson::BiliBili::ParseHTML(_userdata.buffer.data());
     if (results.has_value() == false) return;
 
-    for (auto &_str : results.value())
-    {
-        
-        QListWidgetItem* _item = new QListWidgetItem();
-        QCheckBox* _checkbox = new QCheckBox();
-        QSize size(32, 32);
-        ui->listWidget->addItem(_item);
-        ui->listWidget->setItemWidget(_item, _checkbox);
-        _checkbox->setBaseSize(size);
-        _checkbox->setText("dsds");
+    auto supported_format = ParseJson::BiliBili::GetSuportedFormat(results.value().second);
+    if (results.has_value() == false) return;
 
-        qDebug() << ui->listWidget->count() << "\n";
-    }
-    
+    auto& _title = results.value().first;
+    _video_info[_title] = std::move(supported_format.value());
 
+    auto _item = new QListWidgetItem();
+    auto _checkbox = new QCheckBox();
+    ui->listWidget->addItem(_item);
+    ui->listWidget->setItemWidget(_item, _checkbox);
+    _checkbox->setText(QString::fromStdString(_title));
+
+    _item->setSizeHint(_checkbox->sizeHint());
 }

@@ -7,6 +7,7 @@
 
 namespace SpiderVideo
 {
+
      inline void __stdcall _curl_easy_cleanup(CURL* curl)
      {
      	curl_easy_cleanup(curl);
