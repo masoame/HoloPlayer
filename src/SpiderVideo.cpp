@@ -25,7 +25,6 @@ namespace SpiderVideo
 
         if (_userdata->_writefile.is_open())
             _userdata->_writefile.write(_backcalldata, realsize);
-
         if (_userdata->_type & saveBuffer)_userdata->buffer.insert(_userdata->buffer.end(), _backcalldata, _backcalldata + realsize);
 
         _userdata->size += realsize;
@@ -44,11 +43,15 @@ namespace SpiderVideo
         code = curl_easy_setopt(this->_curl, CURLOPT_URL, request_url);
         if (code != CURLE_OK) return code;
 
+        code = curl_easy_setopt(this->_curl, CURLOPT_PROXY, "127.0.0.1:10809");
+        if (code != CURLE_OK) return code;
+
         code = curl_easy_setopt(this->_curl, CURLOPT_SSL_VERIFYPEER, 0L);
         if (code != CURLE_OK) return code;
 
         code = curl_easy_setopt(this->_curl, CURLOPT_SSL_VERIFYHOST, 0L);
         if (code != CURLE_OK) return code;
+
 
         code = curl_easy_setopt(this->_curl, CURLOPT_CA_CACHE_TIMEOUT, 300L);
         if (code != CURLE_OK) return code;

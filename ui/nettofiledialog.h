@@ -16,10 +16,13 @@ public:
     explicit NetToFileDialog(QWidget *parent = nullptr);
     ~NetToFileDialog();
 
+    void flush_combobox_data();
+
+
 private:
     Ui::NetToFileDialog *ui;
-    std::map<std::string, std::pair<ParseJson::json, std::set<std::string>>> _video_info;
-    SpiderVideo::SpiderTool _userdata;
+    ::ParseJson::BiliBili::DataMap _video_info;
+    ::SpiderVideo::SpiderTool _userdata;
 
 private slots:
     void on_checkUrlBtn_clicked();
