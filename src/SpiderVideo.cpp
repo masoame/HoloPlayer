@@ -2,6 +2,7 @@
 #include<iostream>
 #include<regex>
 #include<string>
+
 namespace SpiderVideo
 {
     static std::regex getHeaderValue{ "Content-Length: (\\d*?)\r\n" ,std::regex::icase};
@@ -40,42 +41,38 @@ namespace SpiderVideo
         if (this->_curl == nullptr) return CURLE_FAILED_INIT;
 
         CURLcode code;
-        code = curl_easy_setopt(this->_curl, CURLOPT_URL, request_url);
+
+        code = _curl_easy_setopt_list(
+            std::forward_as_tuple(CURLOPT_URL, request_url),
+            std::forward_as_tuple(CURLOPT_PROXY, "127.0.0.1:10809"),
+            std::forward_as_tuple(CURLOPT_SSL_VERIFYPEER, 0L),
+            std::forward_as_tuple(CURLOPT_SSL_VERIFYHOST, 0L)
+        );
+
+
+        code = _curl_easy_setopt(CURLOPT_CA_CACHE_TIMEOUT, 300L);
         if (code != CURLE_OK) return code;
 
-        code = curl_easy_setopt(this->_curl, CURLOPT_PROXY, "127.0.0.1:10809");
+        code = _curl_easy_setopt(CURLOPT_FOLLOWLOCATION, 1L);
         if (code != CURLE_OK) return code;
 
-        code = curl_easy_setopt(this->_curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        if (code != CURLE_OK) return code;
-
-        code = curl_easy_setopt(this->_curl, CURLOPT_SSL_VERIFYHOST, 0L);
-        if (code != CURLE_OK) return code;
-
-
-        code = curl_easy_setopt(this->_curl, CURLOPT_CA_CACHE_TIMEOUT, 300L);
-        if (code != CURLE_OK) return code;
-
-        code = curl_easy_setopt(this->_curl, CURLOPT_FOLLOWLOCATION, 1L);
-        if (code != CURLE_OK) return code;
-
-        code = curl_easy_setopt(this->_curl, CURLOPT_ACCEPT_ENCODING, "");
+        code = _curl_easy_setopt(CURLOPT_ACCEPT_ENCODING, "");
         if (code != CURLE_OK) return code;
 
 #ifdef _DEBUG
-        code = curl_easy_setopt(this->_curl, CURLOPT_VERBOSE, true);
+        code = _curl_easy_setopt(CURLOPT_VERBOSE, true);
         if (code != CURLE_OK) return code;
 #endif
-        code = curl_easy_setopt(this->_curl, CURLOPT_HEADERFUNCTION, header_callback);
+        code = _curl_easy_setopt(CURLOPT_HEADERFUNCTION, header_callback);
         if (code != CURLE_OK) return code;
 
-        code = curl_easy_setopt(this->_curl, CURLOPT_HEADERDATA, this);
+        code = _curl_easy_setopt(CURLOPT_HEADERDATA, this);
         if (code != CURLE_OK) return code;
 
-        code = curl_easy_setopt(this->_curl, CURLOPT_WRITEFUNCTION, write_callback);
+        code = _curl_easy_setopt(CURLOPT_WRITEFUNCTION, write_callback);
         if (code != CURLE_OK) return code;
 
-        return curl_easy_setopt(this->_curl, CURLOPT_WRITEDATA, this);
+        return _curl_easy_setopt(CURLOPT_WRITEDATA, this);
     }
 
     CURLcode SpiderTool::SetOption(char type, std::string savepath, std::initializer_list<const char*> headerOption_list,int connecttimeout )
@@ -88,13 +85,13 @@ namespace SpiderVideo
             else return CURLE_FAILED_INIT;
         }
 
-        CURLcode code = curl_easy_setopt(this->_curl, CURLOPT_CONNECTTIMEOUT, connecttimeout);
+        CURLcode code = _curl_easy_setopt(CURLOPT_CONNECTTIMEOUT, connecttimeout);
         if (code != CURLE_OK) return code;
 
         this->header = nullptr;
         curl_slist*& list = this->header;
         for (auto& str : headerOption_list) if(str != nullptr) list = curl_slist_append(list, str);
-        if(list !=nullptr) return curl_easy_setopt(this->_curl, CURLOPT_HTTPHEADER, list);
+        if(list !=nullptr) return _curl_easy_setopt(CURLOPT_HTTPHEADER, list);
         return CURLE_OK;
     }
 
@@ -109,10 +106,10 @@ namespace SpiderVideo
 	}
     CURLcode SpiderTool::RequestOnlyHeader()
     {
-        CURLcode code = curl_easy_setopt(this->_curl, CURLOPT_HEADER, 1);
+        CURLcode code = _curl_easy_setopt(CURLOPT_HEADER, 1);
         if (code != CURLE_OK) return code;
 
-        code = curl_easy_setopt(this->_curl, CURLOPT_NOBODY, 1);
+        code = _curl_easy_setopt(CURLOPT_NOBODY, 1);
         if (code != CURLE_OK) return code;
 
         code = curl_easy_perform(this->_curl);
@@ -124,5 +121,6 @@ namespace SpiderVideo
         if (this->_type & saveBuffer) this->buffer.emplace_back('\0');
         return CURLE_OK;
     }
+
 }
 

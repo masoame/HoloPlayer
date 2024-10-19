@@ -42,6 +42,38 @@ namespace SpiderVideo
 		CURLcode RequestSoure();
 		CURLcode RequestOnlyHeader();
 
+
+		inline CURLcode _curl_easy_setopt(CURLoption option, auto... args) {
+			return ::curl_easy_setopt(this->_curl, option, args...);
+		}
+
+		template<typename... Args, size_t... Is>
+		inline CURLcode _curl_easy_setopt(const std::tuple<Args...>& option_tuple,std::index_sequence<Is...>) {
+			return _curl_easy_setopt(std::get<Is>(option_tuple)...);
+		}
+
+		template<typename... Args, typename Index = std::make_index_sequence<sizeof...(Args)>>
+		inline CURLcode _curl_easy_setopt_ex(const std::tuple<Args...>& option_tuple) {
+			return _curl_easy_setopt(option_tuple, Index{});
+		}
+
+		template<typename... Args>
+		inline CURLcode _curl_easy_setopt_list(Args&& ...option_tuple) {
+			CURLcode code;
+			((code = _curl_easy_setopt_ex(std::forward<Args>(option_tuple))), ...);
+			return CURLE_OK;
+		}
+
+
+
+
+		//inline bool _curl_easy_setopt_ex(auto... option_list) {
+		//	for (auto option : option_list) {
+		//		if (this->_curl_easy_setopt(option.first, option.second)!= CURLE_OK) return false;
+		//	}
+		//	return true;
+		//}
+
 	private:
 		AutoCURLPtr _curl;
 		char _type;
