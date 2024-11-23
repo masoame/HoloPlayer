@@ -363,5 +363,3 @@ MigrationBackup/
 FodyWeavers.xsd
 
 external_library/ffmpeg-n7.1-latest-win64-gpl-shared-7.1/
-CMakePresets.json
-CMakeUserPresets.json
