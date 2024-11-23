@@ -11,6 +11,10 @@
       },
       "environment": {
         "QML_DEBUG_ARGS": "-qmljsdebugger=file:{26e6dc11-22a1-4579-91f8-1bd302b1bc8a},block"
+        "QML_DEBUG_ARGS": "-qmljsdebugger=file:{96a2d2c1-d885-4c72-861f-8373d19ee5ea},block"
+=========
+        "QML_DEBUG_ARGS": "-qmljsdebugger=file:{5624010c-a47c-4b79-845b-d60897cce605},block"
+>>>>>>>>> Temporary merge branch 2
       }
     },
     {
@@ -48,11 +52,11 @@
           "checksum": "gkCoHSl+XMdfaRWZjdB3CxH5GZo="
         }
       }
-    }
-  ],
-  "vendor": {
-    "qt-project.org/Presets": {
       "checksum": "X3gLavbpfEo7xGz18IElSPCasBM="
+      "checksum": "4jV03U8BlwqAUkSyS/6PRmuDjmk="
+=========
+      "checksum": "7LD8mfXI3onPLJMEVhQQHJOyJEA="
+>>>>>>>>> Temporary merge branch 2
     }
   }
 }
