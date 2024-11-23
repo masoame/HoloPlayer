@@ -1,0 +1,14 @@
+<RCC>
+    <qresource prefix="/Image/icon">
+        <file>Image/icon/page0.png</file>
+        <file>Image/icon/page1.png</file>
+        <file>Image/icon/page2.png</file>
+        <file>Image/icon/page3.png</file>
+        <file>Image/icon/page4.png</file>
+        <file>Image/icon/dash-lg.png</file>
+        <file>Image/icon/square.png</file>
+        <file>Image/icon/square-fill.png</file>
+        <file>Image/icon/x-circle.png</file>
+        <file>Image/icon/x-circle-fill.png</file>
+    </qresource>
+</RCC>
